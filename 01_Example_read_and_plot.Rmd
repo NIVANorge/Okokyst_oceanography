@@ -1,0 +1,157 @@
+---
+title: "Reading NC files from K disk, example (station 9: VR51 Korsen)"
+output: 
+  html_document:
+    keep_md: true
+---
+
+Reading NettCDF (nc) files from the data repository  
+`K:\Avdeling\214-Oseanografi\DATABASER\OKOKYST_2017\ncbase_OKOKYST`.   
+  
+Based on [this guide](http://geog.uoregon.edu/GeogR/topics/netCDF-read-ncdf4.html) for NTCD4.
+  
+Reads just two variables from one station as example (station 9: VR51 Korsen)
+
+```{r}
+library(ncdf4)
+
+# Function that needs to be run for plotting using image() or image.plot()
+transpose_for_image <- function(x) t(x[seq(nrow(x),1,-1),])
+library(tidyverse)
+```
+
+```{r}
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/ncbase_OKOKYST"
+dir(folder_data)
+```
+
+Station list (from `print(ncin)` output, see below)
+```
+    22 global attributes:
+        station01: VT3   Torbjoernskjaer   68936
+        station02: VT10  Breiangen         31650
+        station03: VT70  Bjoernafjorden    68910
+        station04: VT69  Korsfjorden       68908
+        station05: VT74  Maurangerfjorden  68913
+        station06: VT53  Tveitneset        68911
+        station07: VT16  Kyrkjeboe         68915
+        station08: VT79  Naersnes          68914
+        station09: VR51  Korsen            68871
+        station10: VT71  Skinnbrokleia     63018
+        station11: VT42  Korsfjorden       59644
+        station12: VR52  Broemsneset       68869
+        station13: VR31  Tilremsfjorden    68870
+        station14: VT81  Alvenes           68950
+        station15: VT82  Setsaa            68951
+        station16: VT43  Kongsbakkneset    68937
+        station17: VT28  Tjukkeneset       68933
+        station18: VR54  Straumsfjorden    68938
+        station19: VR7   Langfjordnes      68971
+        station20: VR24  Tanafjorden       68972
+        station21: VR21  Bugoeynes         68973
+```
+
+## Open file
+```{r}
+fn <- "VR51.nc"
+ncin <- nc_open(paste0(folder_data, "/", fn))
+# This makes a pretty long output:
+# print(ncin)
+# but it does 
+```
+
+## List dimensions and variables
+Variables: `r names(ncin$var)`  
+Dimensions: `r names(ncin$dim)`  
+
+### Position of station
+Longitude, latitude: `r ncvar_get(ncin,"lon")`, `r ncvar_get(ncin,"lat")`
+
+### Dimensions
+For depth, there are two types of dimensions:
+  - for CTD variables (e.g. salinity), use 'depth'
+  - for water sample varibles (e.g. Chl a, nutrients), use 'depth_nut'
+#### Read dimensions
+```{r}
+time <- ncvar_get(ncin, "time")
+depth <- ncvar_get(ncin, "depth")
+depth_nut <- ncvar_get(ncin, "depth_nut")
+```
+#### Dimensions of time, depth, depth of nutrient samples
+  - time: `r dim(time)`  
+  - depth: `r dim(depth)`
+  - depth_nut: `r dim(depth_nut)`  
+  
+#### Range of time, depth, depth of nutrient samples:
+```{r}
+range(time)
+range(depth)
+range(depth_nut)
+```
+
+#### Turn time into time object
+```{r}
+time <- as.POSIXct(time, tz = "UTC", origin = "1970-01-01")
+```
+Time range: `r range(time)`
+
+## Salinity (as example of CTD variable) - read data
+```{r}
+salt <- ncvar_get(ncin, "salt")
+dim(salt)
+```
+### Salinity, plot using fields
+```{r}
+fields::image.plot(transpose_for_image(salt))
+```
+### Make tidy data (for ggplot + anlysis)
+```{r}
+df <- data.frame(Depth = depth, salt)
+colnames(df)[-1] <- paste0("t_", time)
+df2 <- gather(df, "Time", "Salt", -Depth)
+df2$Time <- lubridate::ymd_hms(sub("t_","",df2$Time))
+head(df2, 3)
+```
+
+### Salinity, plot using ggplot
+```{r}
+ggplot(df2, aes(Time, Depth, fill = Salt)) + 
+  geom_raster() +
+  scale_fill_gradient2(low = "red", mid = "green", high = "blue", midpoint = 31) +
+  scale_y_reverse()
+```
+### Salinity, plot profiles
+```{r}
+ggplot(df2, aes(Salt, Depth, color = factor(Time))) +
+  geom_line() + 
+  scale_y_reverse()
+```
+### Salinity, plot time series
+```{r}
+ggplot(df2 %>% filter(Depth %in% c(0,10,50)), aes(Time, Salt, color = factor(Depth))) +
+  geom_line()
+```
+
+## Chlorophyll a (as example of a water sample variable)
+```{r}
+chla <- ncvar_get(ncin, "KlfA")
+df <- data.frame(Depth = depth_nut, chla)        # using depth_nut instead of depth
+colnames(df)[-1] <- paste0("t_", time)
+df2 <- gather(df, "Time", "Chl a", -Depth)
+df2$Time <- lubridate::ymd_hms(sub("t_","",df2$Time))
+head(df2, 3)
+```
+
+### Chlorophyll a, image plot
+```{r}
+ggplot(df2, aes(Time, Depth, fill = `Chl a`)) + 
+  geom_raster() +
+  scale_fill_gradient2(low = "black", mid = "blue", high = "green", midpoint = 1) +
+  scale_y_reverse()
+```
+### Chlorophyll a, time series plot
+```{r}
+ggplot(df2, aes(Time, `Chl a`, color = factor(Depth))) +
+  geom_line()
+```
+
