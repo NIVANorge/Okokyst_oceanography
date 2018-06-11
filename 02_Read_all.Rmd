@@ -1,0 +1,105 @@
+---
+title: "Reading all nc files"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: yes
+---
+
+## Libraries and functions
+```{r}
+library(ncdf4)
+library(tidyverse)
+library(ggmap)
+library(readxl)
+
+# Function that needs to be run for plotting using image() or image.plot()
+transpose_for_image <- function(x) t(x[seq(nrow(x),1,-1),])
+
+# Load function okokyst_read_nc()
+source("02_Read_all_functions.R")
+
+# Maps for used with ggplot
+map1 <- get_googlemap(c(lon=9, lat=62.5), zoom=4) %>% ggmap()
+map2 <- get_googlemap(c(lon=9, lat=62.5), zoom=5) %>% ggmap()
+
+# Specify folder for nc files
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/ncbase_OKOKYST"
+```
+
+## Get station attributes
+```{r}
+fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Hydrografi_Stasjoner_v5.xlsx"
+df_stations <- read_excel(fn) %>% 
+  rename(ProjectName = ProjcetName)
+df_stations$StationName[9] <- "Korsfjorden_Hord"
+df_stations$StationName[18] <- "Korsfjorden_Trønd"
+```
+
+## Test reads
+### Test read 1
+```{r}
+df <- okokyst_read_nc("VR51.nc", "salt", ctd_variable = TRUE)
+ggplot(df, aes(salt, Depth, color = factor(Time))) +
+  geom_line() + 
+  scale_y_reverse()
+```
+
+### Test read 2
+```{r}
+# debugonce(okokyst_read_nc)
+df <- okokyst_read_nc("VR51.nc", "KlfA", ctd_variable = FALSE)
+ggplot(df, aes(Time, KlfA, color = factor(Depth))) +
+  geom_line()
+```
+
+## Read chlorophyll KlfA from all files
+```{r}
+# Filenames
+fn_nc <- grep(".nc", dir(folder_data), fixed = TRUE, value = TRUE)
+
+# For checking for errors:
+# df_chla <- fn_nc %>% map_df(~okokyst_read_nc(., "KlfA", ctd_variable = FALSE, report = TRUE))
+df_data <- fn_nc %>% map_df(~okokyst_read_nc(., "KlfA", ctd_variable = FALSE))
+
+xtabs(~is.na(KlfA) + Filename, df_data)
+```
+
+### Add ProjectName, StationName
+```{r}
+df_chla <- df_data %>%
+  mutate(StationCode = sub(".nc", "", Filename, fixed = TRUE)) %>%
+  left_join(df_stations %>% select(StationCode, StationName, ProjectName)) %>% 
+  select(ProjectName, StationName, StationCode, Long, Lat, Time, Depth, KlfA)
+
+# Test (should be empty, i.e. 0 rows)
+df_chla %>%
+  filter(is.na(StationName)) %>%
+  group_by(StationCode) %>%
+  summarize(N = n())
+```
+
+## Plot of stations
+```{r, fig.width = 5.5}
+map2 + 
+  scale_shape_identity() + scale_fill_identity() +
+  geom_point(data = df_chla, aes(x = Long, y = Lat))
+```
+
+## Test plot of all data
+```{r, fig.width = 9}
+ggplot(df_chla %>% 
+         mutate(StationName = factor(StationName, levels = df_stations$StationName)), 
+       aes(Time, KlfA, color = factor(Depth))) +
+  geom_line() +
+  scale_color_brewer("Depth", type = "seq") +
+  facet_wrap(~StationName) +
+  theme_dark()
+```
+
+## Save data
+```{r}
+saveRDS(df_chla, "Data/02_df_chla.RData")
+```
+
+
