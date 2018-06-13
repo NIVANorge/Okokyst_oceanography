@@ -99,6 +99,7 @@ ggplot(df_chla %>%
 
 ## Save data
 ```{r}
+saveRDS(df_stations, "Data/02_df_stations.RData")
 saveRDS(df_chla, "Data/02_df_chla.RData")
 ```
 
