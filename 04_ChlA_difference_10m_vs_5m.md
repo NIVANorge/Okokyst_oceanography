@@ -144,7 +144,7 @@ df_chla2 %>% nrow()
 
 ### Time series of Chl a at 5 m, absolute difference as colour {.tabset}
   * Coloured/connected dots: Chl a at 5 m  
-  * Blue crosses: Chl a at 5 m
+  * Blue crosses: Chl a at 10 m
   
 #### Full y scale
 ![](04_ChlA_difference_10m_vs_5m_files/figure-html/unnamed-chunk-9-1.png)<!-- -->
@@ -169,7 +169,7 @@ df_chla2 %>% nrow()
 
 ### Time series of Chl a at 5 m, percent difference as colour {.tabset}
   * Coloured/connected dots: Chl a at 5 m  
-  * Blue crosses: Chl a at 5 m
+  * Blue crosses: Chl a at 10 m
 
 #### Full y scale
 ![](04_ChlA_difference_10m_vs_5m_files/figure-html/unnamed-chunk-14-1.png)<!-- -->
