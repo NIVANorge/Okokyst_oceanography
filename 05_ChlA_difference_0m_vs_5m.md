@@ -1,10 +1,9 @@
 ---
 title: "Økokyst data - ChlA measured at 0 m vs 5 m"
 output: 
-  html_document:
+  html_document: 
     keep_md: yes
     toc: yes
-  
 ---
 
 ## Library
@@ -43,9 +42,9 @@ Pick 0 and 5 m and rearrange so
 
 ```r
 df_chla2 <- df_chla %>% 
-  filter(Depth >= 5 & Depth <= 10) %>%
+  filter(Depth >= 0 & Depth <= 5) %>%
   spread(Depth, KlfA) %>%
-  rename(Depth_00_m = `10`, Depth_05_m = `5`) %>%
+  rename(Depth_00_m = `0`, Depth_05_m = `5`) %>%
   mutate(Abs_difference_00m_vs_05m = Depth_00_m - Depth_05_m,
          Perc_difference_00m_vs_05m = 100*(Depth_00_m - Depth_05_m)/Depth_05_m,
          StationName = factor(StationName, levels = df_stations$StationName))
@@ -72,21 +71,21 @@ df_chla2 %>% nrow()
 ```
 
 ```
-##    Depth_00_m       Depth_05_m    Abs_difference_00m_vs_05m
-##  Min.   :0.1600   Min.   :0.160   Min.   :-7.4000          
-##  1st Qu.:0.3900   1st Qu.:0.580   1st Qu.:-0.4850          
-##  Median :0.7400   Median :0.970   Median :-0.1000          
-##  Mean   :0.9835   Mean   :1.165   Mean   :-0.2018          
-##  3rd Qu.:1.3000   3rd Qu.:1.500   3rd Qu.: 0.0550          
-##  Max.   :5.8000   Max.   :9.300   Max.   : 3.8000          
-##  NA's   :19       NA's   :7       NA's   :19               
+##    Depth_00_m      Depth_05_m    Abs_difference_00m_vs_05m
+##  Min.   :0.120   Min.   :0.160   Min.   :-8.5800          
+##  1st Qu.:0.610   1st Qu.:0.580   1st Qu.:-0.2000          
+##  Median :0.980   Median :0.970   Median : 0.0000          
+##  Mean   :1.203   Mean   :1.165   Mean   : 0.0173          
+##  3rd Qu.:1.500   3rd Qu.:1.500   3rd Qu.: 0.2700          
+##  Max.   :6.200   Max.   :9.300   Max.   : 2.5000          
+##  NA's   :19      NA's   :7       NA's   :19               
 ##  Perc_difference_00m_vs_05m
-##  Min.   :-82.353           
-##  1st Qu.:-36.285           
-##  Median :-16.129           
-##  Mean   : -9.117           
-##  3rd Qu.:  6.695           
-##  Max.   :191.667           
+##  Min.   :-92.26            
+##  1st Qu.:-17.91            
+##  Median :  0.00            
+##  Mean   : 23.77            
+##  3rd Qu.: 36.04            
+##  Max.   :775.00            
 ##  NA's   :19
 ```
 
@@ -96,7 +95,7 @@ df_chla2 %>% nrow()
 
 ```
 ##     0%    20%    40%    60%    80%   100% 
-## -7.400 -0.570 -0.200 -0.046  0.100  3.800
+## -8.580 -0.300 -0.020  0.070  0.404  2.500
 ```
 
 ```
@@ -105,7 +104,7 @@ df_chla2 %>% nrow()
 
 ```
 ##    0%   20%   40%   60%   80%  100% 
-## 0.000 0.070 0.166 0.320 0.676 7.400
+## 0.000 0.048 0.162 0.350 0.772 8.580
 ```
 
 ```
@@ -114,7 +113,7 @@ df_chla2 %>% nrow()
 
 ```
 ##         0%        20%        40%        60%        80%       100% 
-## -82.352941 -40.235294 -25.000000  -6.952381  12.396396 191.666667
+## -92.258065 -24.310345  -3.742857  10.690789  50.927885 775.000000
 ```
 
 ```
@@ -123,7 +122,7 @@ df_chla2 %>% nrow()
 
 ```
 ##         0%        20%        40%        60%        80%       100% 
-##   0.000000   9.072727  22.888889  35.155280  48.644377 191.666667
+##   0.000000   7.692308  16.511628  35.974026  64.019324 775.000000
 ```
 
 ## Absolute difference
@@ -143,7 +142,7 @@ df_chla2 %>% nrow()
 ![](05_ChlA_difference_0m_vs_5m_files/figure-html/unnamed-chunk-8-1.png)<!-- -->
 
 ### Time series of Chl a at 5 m, absolute difference as colour {.tabset}
-  * Coloured/connected dots: Chl a at 5 m  
+  * Co loured/connected dots: Chl a at 5 m  
   * Blue crosses: Chl a at 0 m
   
 #### Full y scale

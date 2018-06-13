@@ -1,10 +1,9 @@
 ---
 title: "Økokyst data - ChlA measured at 0 m vs 5 m"
 output: 
-  html_document:
+  html_document: 
     keep_md: yes
     toc: yes
-  
 ---
 
 ## Library
@@ -23,9 +22,9 @@ df_stations <- readRDS("Data/02_df_stations.RData")
 Pick 0 and 5 m and rearrange so 
 ```{r}
 df_chla2 <- df_chla %>% 
-  filter(Depth >= 5 & Depth <= 10) %>%
+  filter(Depth >= 0 & Depth <= 5) %>%
   spread(Depth, KlfA) %>%
-  rename(Depth_00_m = `10`, Depth_05_m = `5`) %>%
+  rename(Depth_00_m = `0`, Depth_05_m = `5`) %>%
   mutate(Abs_difference_00m_vs_05m = Depth_00_m - Depth_05_m,
          Perc_difference_00m_vs_05m = 100*(Depth_00_m - Depth_05_m)/Depth_05_m,
          StationName = factor(StationName, levels = df_stations$StationName))
@@ -94,7 +93,7 @@ gg + coord_cartesian(ylim = c(-2.5, 2.5))
 ```
 
 ### Time series of Chl a at 5 m, absolute difference as colour {.tabset}
-  * Coloured/connected dots: Chl a at 5 m  
+  * Co loured/connected dots: Chl a at 5 m  
   * Blue crosses: Chl a at 0 m
   
 #### Full y scale
