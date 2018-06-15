@@ -29,6 +29,8 @@ df_chla2 <- df_chla %>%
   mutate(Abs_difference_10m_vs_5m = Depth_10_m - Depth_5_m,
          Perc_difference_10m_vs_5m = 100*(Depth_10_m - Depth_5_m)/Depth_5_m,
          StationName = factor(StationName, levels = df_stations$StationName))
+df_chla2$StationCodeName  <- with(df_chla2, paste(StationCode, StationName))
+
 # Checking (line 1 should be 2x line 2)
 df_chla %>% filter(Depth <= 5) %>% nrow()
 df_chla2 %>% nrow()
@@ -68,7 +70,7 @@ gg <- ggplot(df_chla2,
   geom_point() +
   scale_color_manual("Absolute\ndifference", values = absdiff_colors, na.value = "grey30") +
   geom_abline(aes(intercept = 0, slope = 1)) +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 gg
 ```
 
@@ -84,7 +86,7 @@ gg +
 gg <- ggplot(df_chla2, aes(Time, Abs_difference_10m_vs_5m)) +
   geom_hline(aes(yintercept = 0)) +
   geom_line(color = "brown", size = 1) +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 gg
 ```
 
@@ -109,7 +111,7 @@ gg <- ggplot(df_chla2,
   geom_point() +
   geom_point(data = df_chla2, aes(Time, Depth_10_m), color = "blue", shape = 4) +
   scale_color_manual("Absolute\ndifference", values = absdiff_colors, na.value = "grey30") +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 gg
 ```
 
@@ -132,7 +134,7 @@ gg <- ggplot(df_chla2, aes(Depth_10_m, Depth_5_m,
   geom_point() +
   scale_color_manual("Percent\ndifference", values = percent_colors, na.value = "grey30") +
   geom_abline(aes(intercept = 0, slope = 1)) +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 gg
 ```
 
@@ -149,7 +151,7 @@ gg +
 ```{r, fig.width=9, echo=FALSE, warning=FALSE}
 ggplot(df_chla2, aes(Time, Perc_difference_10m_vs_5m)) +
   geom_line() +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 
 ```
 
@@ -166,7 +168,7 @@ gg <- ggplot(df_chla2, aes(Time, Depth_5_m,
   geom_point() +
   geom_point(data = df_chla2, aes(Time, Depth_10_m), color = "blue", shape = 4) +
   scale_color_manual("Percent\ndifference", values = percent_colors, na.value = "grey30") +
-  facet_wrap(~StationName)
+  facet_wrap(~StationCodeName)
 gg
 ```
 

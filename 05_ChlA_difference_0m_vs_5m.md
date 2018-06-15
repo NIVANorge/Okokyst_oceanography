@@ -13,7 +13,7 @@ library(tidyverse)
 ```
 
 ```
-## -- Attaching packages ------------------------------------------------------------------------ tidyverse 1.2.1 --
+## -- Attaching packages -------------------------------------------------------- tidyverse 1.2.1 --
 ```
 
 ```
@@ -24,7 +24,7 @@ library(tidyverse)
 ```
 
 ```
-## -- Conflicts --------------------------------------------------------------------------- tidyverse_conflicts() --
+## -- Conflicts ----------------------------------------------------------- tidyverse_conflicts() --
 ## x dplyr::filter() masks stats::filter()
 ## x dplyr::lag()    masks stats::lag()
 ```
@@ -48,6 +48,7 @@ df_chla2 <- df_chla %>%
   mutate(Abs_difference_00m_vs_05m = Depth_00_m - Depth_05_m,
          Perc_difference_00m_vs_05m = 100*(Depth_00_m - Depth_05_m)/Depth_05_m,
          StationName = factor(StationName, levels = df_stations$StationName))
+df_chla2$StationCodeName  <- with(df_chla2, paste(StationCode, StationName))
 # Checking (line 1 should be 2x line 2)
 df_chla %>% filter(Depth <= 5) %>% nrow()
 ```

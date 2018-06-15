@@ -49,6 +49,8 @@ df_chla2 <- df_chla %>%
   mutate(Abs_difference_10m_vs_5m = Depth_10_m - Depth_5_m,
          Perc_difference_10m_vs_5m = 100*(Depth_10_m - Depth_5_m)/Depth_5_m,
          StationName = factor(StationName, levels = df_stations$StationName))
+df_chla2$StationCodeName  <- with(df_chla2, paste(StationCode, StationName))
+
 # Checking (line 1 should be 2x line 2)
 df_chla %>% filter(Depth <= 5) %>% nrow()
 ```
