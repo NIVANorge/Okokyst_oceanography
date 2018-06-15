@@ -9,6 +9,7 @@ output:
 ## Library
 ```{r}
 library(tidyverse)
+library(lubridate)
 ```
 
 ## Data
@@ -28,6 +29,8 @@ df_chla2 <- df_chla %>%
   mutate(Abs_difference_00m_vs_05m = Depth_00_m - Depth_05_m,
          Perc_difference_00m_vs_05m = 100*(Depth_00_m - Depth_05_m)/Depth_05_m,
          StationName = factor(StationName, levels = df_stations$StationName))
+# Adding 'StationCodeName' for graphs
+df_chla$StationCodeName  <- with(df_chla, paste(StationCode, StationName))
 df_chla2$StationCodeName  <- with(df_chla2, paste(StationCode, StationName))
 # Checking (line 1 should be 2x line 2)
 df_chla %>% filter(Depth <= 5) %>% nrow()
@@ -176,3 +179,135 @@ gg +
   coord_cartesian(ylim = c(0, 4.5))
 ```
 
+## Absolute difference, plots for each station
+__If `save_plots` is set to true, these plots are saved to file__
+```{r}
+# unique(df_chla2$StationCodeName) %>% dput()
+stations_oceanic <- c("VT70 Bjørnafjorden", 
+                   "VT71 Skinnbrokleia",
+                   "VR31 Tilremsfjorden", 
+                   "VT3 Torbjørnskjær")
+
+stations_fjord <- c("VT75 Fusafjorden", 
+  "VT52 Kvinnheradsfjorden", "VT16 Kyrkjebø", "VT74 Maurangerfjorden", 
+  "VT79 Nærsnes", "VT53 Tveitneset", "VR51 Korsen",
+  "VR52 Broemsneset", "VT42 Korsfjorden_Trønd",  
+  "VT2 Bastø", "VT10 Breiangen", "VT66 Håøyfjorden", 
+  "VT67 Langesundsfjorden",   "VT65 Missingene")
+```
+
+### Scatter plot (0 m vs 5 m), code
+```{r, fig.height=5, fig.width=5, echo=FALSE, warning=FALSE}
+plot_scatter <- function(codename){
+  df_chla2_sel <- df_chla2 %>% 
+    filter(StationCodeName == codename & !is.na(Abs_difference_00m_vs_05m))
+  absdiff_max <- df_chla2_sel$Abs_difference_00m_vs_05m %>% 
+    abs() %>% max() %>% ceiling()
+  if (absdiff_max > 2){
+    absdiff_breaks <- c(0,0.1,0.25,0.5,1,2, absdiff_max)
+    absdiff_colors <- c("green4","green","orange","orange3","red","red4")
+  } else {
+    absdiff_breaks <- c(0,0.1,0.25,0.5,1,2)
+    absdiff_colors <- c("green4","green","orange","orange3","red")
+  }
+  gg <- ggplot(
+    df_chla2_sel, 
+    aes(x = Depth_00_m, 
+        y = Depth_05_m, 
+        color = cut(abs(Abs_difference_00m_vs_05m), 
+                    absdiff_breaks, include.lowest = TRUE)
+    )) +
+    geom_point(size = 2) +
+    
+    scale_color_manual("Absolute\ndifference", values = absdiff_colors, na.value = "grey30") +
+    geom_abline(aes(intercept = 0, slope = 1), size = 1) +
+    #?geom_hline(aes(yintercept = c(3.5,7,11,20))) +
+    geom_vline(xintercept = c(3.5,7), linetype = "dashed") +
+    geom_hline(yintercept = c(3.5,7), linetype = "dashed") +
+    scale_x_continuous(breaks = seq(0, 20, 1)) +
+    scale_y_continuous(breaks = seq(0, 20, 1)) +
+    expand_limits(x = 0, y = 0) +
+    coord_fixed() +
+    labs(title = codename, x = "Chl a, 5 m", y = "Chl a, 0 m")
+  gg
+}
+
+save_scatter <- function(codename, subfolder){
+  gg <- plot_scatter(codename)
+  ggsave(sprintf("Figures_0m_vs_5m/%s/%s Scatter.png", subfolder, codename), gg, width = 5, height = 4, dpi = 500)
+}
+
+# Test:
+# plot_scatter("VR31 Tilremsfjorden")
+```
+
+# Scatter, oceanic stations
+```{r, fig.height=5, fig.width=5}
+# For showing in notebook
+# stations_oceanic %>% walk(~print(plot_scatter(.)))
+
+# For saving
+stations_oceanic %>% walk(~save_scatter(., "Oceanic"))
+```
+
+### Scatter, closed stations
+```{r, fig.width=5, fig.height=5}
+stations_fjord %>% walk(~save_scatter(., "Fjord"))
+```
+
+
+### Stack" plot (0 m vs 5 m), function
+Using only March-October data
+```{r, fig.height=5, fig.width=5, echo=FALSE, warning=FALSE}
+plot_stack_makedata <- function(codename){
+  df_chla_sel <- df_chla %>% 
+    filter(StationCodeName == codename & !is.na(KlfA)) %>%
+    filter(Depth %in% c(0,5,10) & month(Time) >= 3 & month(Time) <= 10) %>%
+    group_by(Depth) %>%
+    mutate(Rank = dense_rank(-KlfA), Second_highest = (Rank == 2))
+  df_chla_sel
+  }
+# plot_stack_makedata("VR31 Tilremsfjorden")
+
+plot_stack <- function(codename){
+  df <- plot_stack_makedata(codename)
+  gg <- ggplot(df, 
+    aes(x = Depth, y = KlfA, color = Second_highest)) +
+    geom_point(shape = "_", size = 9) +
+    geom_hline(yintercept = c(3.5,7), linetype = "dashed") +
+    scale_color_manual(values = c("grey40", "red3")) +
+    scale_x_continuous(breaks = c(0, 5, 10)) +
+    scale_y_continuous(breaks = seq(0, 20, 1)) +
+    coord_cartesian(xlim = c(-2, 12)) +
+    expand_limits(y = 0) +
+    labs(title = codename, x = "Depth (m)", y = "Chl a") +
+    theme(legend.position = "none")
+  gg
+}
+
+save_stack <- function(codename, subfolder){
+  gg <- plot_stack(codename)
+  fn <- sprintf("Figures_0m_5m_10m/%s/%s Stack.png", subfolder, codename)
+  ggsave(fn, gg, width = 5, height = 4, dpi = 400)
+}
+
+# Test:
+# plot_stack("VR31 Tilremsfjorden")
+gg <- plot_stack("VR31 Tilremsfjorden")
+# debugonce(save_stack)
+ save_stack("VR31 Tilremsfjorden", "Oceanic")
+```
+
+# Stack plots, oceanic stations
+```{r, fig.height=5, fig.width=5}
+# For showing in notebook
+# stations_oceanic %>% walk(~print(plot_scatter(.)))
+
+# For saving
+stations_oceanic %>% walk(~save_stack(., "Oceanic"))
+```
+
+### Scatter, closed stations
+```{r, fig.width=5, fig.height=5}
+stations_fjord %>% walk(~save_stack(., "Fjord"))
+```
