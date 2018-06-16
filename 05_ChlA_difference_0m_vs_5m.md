@@ -13,7 +13,7 @@ library(tidyverse)
 ```
 
 ```
-## -- Attaching packages -------------------------------------------------------- tidyverse 1.2.1 --
+## -- Attaching packages -------------------------------------------------------------------------------------------------- tidyverse 1.2.1 --
 ```
 
 ```
@@ -24,9 +24,24 @@ library(tidyverse)
 ```
 
 ```
-## -- Conflicts ----------------------------------------------------------- tidyverse_conflicts() --
+## -- Conflicts ----------------------------------------------------------------------------------------------------- tidyverse_conflicts() --
 ## x dplyr::filter() masks stats::filter()
 ## x dplyr::lag()    masks stats::lag()
+```
+
+```r
+library(lubridate)
+```
+
+```
+## 
+## Attaching package: 'lubridate'
+```
+
+```
+## The following object is masked from 'package:base':
+## 
+##     date
 ```
 
 ## Data
@@ -38,7 +53,7 @@ df_stations <- readRDS("Data/02_df_stations.RData")
 ```
 
 ## Make data set for plots
-Pick 0 and 5 m and rearrange so 
+Pick 0 and 5 m and rearrang
 
 ```r
 df_chla2 <- df_chla %>% 
@@ -48,6 +63,8 @@ df_chla2 <- df_chla %>%
   mutate(Abs_difference_00m_vs_05m = Depth_00_m - Depth_05_m,
          Perc_difference_00m_vs_05m = 100*(Depth_00_m - Depth_05_m)/Depth_05_m,
          StationName = factor(StationName, levels = df_stations$StationName))
+# Adding 'StationCodeName' for graphs
+df_chla$StationCodeName  <- with(df_chla, paste(StationCode, StationName))
 df_chla2$StationCodeName  <- with(df_chla2, paste(StationCode, StationName))
 # Checking (line 1 should be 2x line 2)
 df_chla %>% filter(Depth <= 5) %>% nrow()
@@ -176,4 +193,90 @@ df_chla2 %>% nrow()
 
 #### Restricted y scale
 ![](05_ChlA_difference_0m_vs_5m_files/figure-html/unnamed-chunk-15-1.png)<!-- -->
+  
+# Absolute difference, plots for each station   
+### Define stations  
 
+```r
+# unique(df_chla2$StationCodeName) %>% dput()
+stations_oceanic <- c("VT70 Bjørnafjorden", 
+                   "VT71 Skinnbrokleia",
+                   "VR31 Tilremsfjorden", 
+                   "VT3 Torbjørnskjær")
+
+stations_fjord <- c("VT75 Fusafjorden", 
+  "VT52 Kvinnheradsfjorden", "VT16 Kyrkjebø", "VT74 Maurangerfjorden", 
+  "VT79 Nærsnes", "VT53 Tveitneset", "VR51 Korsen",
+  "VR52 Broemsneset", "VT42 Korsfjorden_Trønd",  
+  "VT2 Bastø", "VT10 Breiangen", "VT66 Håøyfjorden", 
+  "VT67 Langesundsfjorden",   "VT65 Missingene")
+```
+  
+### Scatter plot (0 m vs 5 m), function  
+
+
+#### Scatter, oceanic stations
+
+```r
+# For showing in notebook
+# stations_oceanic %>% walk(~print(plot_scatter(.)))
+
+# For saving
+stations_oceanic %>% walk(~save_scatter(., "Oceanic"))
+```
+
+#### Scatter, closed stations
+
+```r
+stations_fjord %>% walk(~save_scatter(., "Fjord"))
+```
+
+### Difference vs. time, function
+![](05_ChlA_difference_0m_vs_5m_files/figure-html/unnamed-chunk-20-1.png)<!-- -->
+#### Difference vs. time, oceanic stations
+
+```r
+stations_oceanic %>% walk(~save_diff(., "Oceanic"))
+```
+
+#### Difference vs. time, fjord stations
+
+```r
+stations_fjord %>% walk(~save_diff(., "Fjord"))
+```
+
+
+### Time series plot, function
+
+
+#### Time series plots, oceanic stations
+
+```r
+stations_oceanic %>% walk(~save_time(., "Oceanic"))
+```
+
+#### Time series plots, fjord stations
+
+```r
+stations_fjord %>% walk(~save_time(., "Fjord"))
+```
+
+### "Stack" plot (0 m, 5 m and 10 m), function
+Using only March-October data
+
+
+#### Stack plots, oceanic stations
+
+```r
+# For showing in notebook
+# stations_oceanic %>% walk(~print(plot_scatter(.)))
+
+# For saving
+stations_oceanic %>% walk(~save_stack(., "Oceanic"))
+```
+
+#### Stack plots, fjord stations
+
+```r
+stations_fjord %>% walk(~save_stack(., "Fjord"))
+```
