@@ -378,6 +378,7 @@ ggsave(fn_save)
 # 5c. Norwegion Ocean South 2, VR31 ----
 #
 
+dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/")
 dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_SNO/ncbase/2018")            # VR31_2014_2018
 dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_Aquakompetanse/ncbase/2018") # VR52_2017_2018
 dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_MagneAuren/ncbase/2018")     # VT42_2011_2018
@@ -485,7 +486,6 @@ fn_save <- sprintf("Figures/06_QC/%s_%s.png", sub(".nc", "", fn, fixed = TRUE), 
 ggsave(fn_save)
 
 
-
 #
 # 5d. Norwegion Ocean South 2, VR42 ----
 #
@@ -546,6 +546,117 @@ okokyst_plot(df, var, ctd_variable = ctd, title = fn, binwidth = 10, limits = c(
 okokyst_plot_save(fn, var)
 okokyst_plot_points(df, var, ctd_variable = ctd, title = fn, limits = c(0, 60))
 okokyst_plot_save(fn, var, extra = "_02")
+
+
+#
+# Phytoplankton cell carbon
+#
+# $CFYT1 "Diatoms cell carbon"
+# $CFYT2 "Dinoflagellates cell carbon"
+# $CFYT3  "Other phytoplankton cell carbon"
+var <- "CFYT1"
+ctd <- FALSE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df1 <- df[!is.na(df[,var]),]
+var <- "CFYT2"
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df2 <- df[!is.na(df[,var]),]
+var <- "CFYT3"
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df3 <- df[!is.na(df[,var]),]
+df <- df1 %>% left_join(df2) %>% left_join(df3)
+df %>% 
+  tidyr::gather("Taxon", "Cell_carbon", CFYT1:CFYT3) %>%
+  ggplot(aes(Time, Cell_carbon, fill = Taxon)) +
+  geom_area()
+fn_save <- sprintf("Figures/06_QC/%s_%s.png", sub(".nc", "", fn, fixed = TRUE), "planktoncarbon")
+ggsave(fn_save)
+
+#
+# Phytoplankton counts
+#
+# $FYT  [1] "Diatoms count"
+# $FYT2 [1] "Dinoflagellates count"
+# $FYT3 [1] "Other phytoplankton count"
+
+var <- "FYT1"
+ctd <- FALSE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df1 <- df[!is.na(df[,var]),]
+var <- "FYT2"
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df2 <- df[!is.na(df[,var]),]
+var <- "FYT3"
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+df3 <- df[!is.na(df[,var]),]
+df <- df1 %>% left_join(df2) %>% left_join(df3)
+df %>% 
+  tidyr::gather("Taxon", "Cell_count", FYT1:FYT3) %>%
+  ggplot(aes(Time, Cell_count, fill = Taxon)) +
+  geom_area()
+fn_save <- sprintf("Figures/06_QC/%s_%s.png", sub(".nc", "", fn, fixed = TRUE), "planktoncounts")
+ggsave(fn_save)
+
+
+
+
+#
+# 5e. Skagerrak, VR31 ----
+#
+
+dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/")
+dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Skagerrak/ncbase/2018")      # VT2, 3, 10, 65, 66, 67, 68
+dir("K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Skagerrak/ncbase/2018/VT2")  # VT2, 3, 10, 65, 66, 67, 68
+
+
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Skagerrak/ncbase/2018/VT2"
+dir(folder_data, "*.nc")
+fn <- "VT2_2017_2018.nc"
+
+# Get variable names
+ncin <- nc_open(paste0(folder_data, "/", fn))
+# str(ncin$var, 1)
+names(ncin$var)
+
+# Get variable long names
+purrr::transpose(ncin$var)$longname
+
+var <- "salt"
+ctd <- TRUE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd)
+okokyst_plot(df, var, ctd_variable = ctd, title = fn, color_ctdtime = "grey70")
+okokyst_plot_save(fn, var)
+
+
+var <- "temp"
+ctd <- TRUE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+okokyst_plot(df, var, ctd_variable = ctd, title = fn, color_ctdtime = "grey80")
+okokyst_plot_save(fn, var)
+
+var <- "O2sat"
+ctd <- TRUE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+okokyst_plot(df, var, ctd_variable = ctd, title = fn, binwidth = 20, color_ctdtime = "grey80")
+okokyst_plot_save(fn, var)
+
+#
+# Same station, chl a and nutrients
+#
+
+var <- "NO3"
+ctd <- FALSE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+okokyst_plot(df, var, ctd_variable = ctd, title = fn, binwidth = 20, limits = c(-3, 250))
+okokyst_plot_save(fn, var)
+okokyst_plot_points(df, var, ctd_variable = ctd, title = fn, limits = c(0, 250))
+okokyst_plot_save(fn, var, extra = "_02")
+
+var <- "PO4"
+ctd <- FALSE
+df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
+okokyst_plot(df, var, ctd_variable = ctd, title = fn, binwidth = 10, limits = c(0, 60))
+okokyst_plot_save(fn, var)
 
 
 #
