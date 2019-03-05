@@ -1,4 +1,23 @@
 
+
+# Make plots from Netcdf and compare results with Matlab plots:
+#
+# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091\Rapport 2018-data\Vannmassene
+#   VR51 + VR71 (Salt, temp, oxy, NO3, PO4, SiO2, plankton biomass and count) 
+
+# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør II O-17090_19090\Årsrapport2018\2018_Årsrapport\Vannmassene\Plankton
+
+# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Årsrapport2018\Årsrapport 2018 data\Vannmassene\Plankton
+
+# See mail from: André Staalstrøm <Andre.Staalstrom@niva.no> 
+# Sent: fredag 22. februar 2019 08:20
+
+# Part 3-4 is just testing/developing functions
+# Can skip directly from part 2 to part 5
+# Part 5 is pretty "wordy" and could probably be shortened with some higher-level functions
+
+
+
 # 1. Libraries ----
 
 library(ncdf4)
@@ -142,14 +161,6 @@ dir(folder_data, "*.nc")
 # 5. Plotting using functions ----
 # 
 
-# Compare results with Matlab plots:
-# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091\Rapport 2018-data\Vannmassene
-#   VR51 + VR71 (Salt, temp, oxy, NO3, PO4, SiO2, plankton biomass and count) 
-# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør II O-17090_19090\Årsrapport2018\2018_Årsrapport\Vannmassene\Plankton
-# K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Årsrapport2018\Årsrapport 2018 data\Vannmassene\Plankton
-# See mail from: André Staalstrøm <Andre.Staalstrom@niva.no> 
-# Sent: fredag 22. februar 2019 08:20
-
 
 # Function for saving each plot
 okokyst_plot_save <- function(fn, var, extra = "", width = 8.5, height = 6.2){
@@ -162,7 +173,7 @@ okokyst_plot_save <- function(fn, var, extra = "", width = 8.5, height = 6.2){
 #
 
 
-folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_SNO/ncbase/2018"
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/ncbase/2018"
 dir(folder_data, "*.nc")
 fn <- "VR51_2017_2018.nc"
 
@@ -266,6 +277,7 @@ ggsave(fn_save)
 # 5b. Norwegion Ocean South 1, VT71_2013_2018 ----
 #
 
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/ncbase/2018"
 dir(folder_data, "*.nc")
 fn <- "VT71_2013_2018.nc"
 
@@ -311,12 +323,34 @@ ctd <- FALSE
 df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
 okokyst_plot(df, var, ctd_variable = ctd, binwidth = 20, limits = c(NA, 250))
 okokyst_plot_save(fn, var)
+okokyst_plot_points(df, var, ctd_variable = ctd, title = fn, binwidth = 20)
+okokyst_plot_save(fn, var, extra = "_02")
+
+ggplot(df, aes(NO3, Depth)) +
+  geom_line(aes(color = factor(Time))) +
+  scale_y_reverse() +
+  theme(legend.position = "none")
 
 var <- "PO4"
 ctd <- FALSE
 df <- okokyst_read_nc(fn, var, ctd_variable = ctd); mean(!is.na(df[[var]]))
 okokyst_plot(df, var, ctd_variable = ctd, binwidth = 5)
 okokyst_plot_save(fn, var)
+
+#
+# Note: Very high PO4 value (= 38) on 20 m depth 2014-07-10
+#
+okokyst_plot_points(df, var, ctd_variable = ctd, title = fn, binwidth = 20)
+okokyst_plot_save(fn, var, extra = "02")
+
+ggplot(df, aes(PO4, Depth)) +
+  geom_path(aes(color = factor(Time))) +
+  scale_y_reverse() +
+  theme(legend.position = "none")
+okokyst_plot_save(fn, var, extra = "03")
+
+df %>% filter(Depth == 20) %>% ggplot(aes(Time, PO4)) + geom_line() + ggtitle("Depth = 20 m")
+okokyst_plot_save(fn, var, extra = "04")
 
 var <- "SiO2"
 ctd <- FALSE
