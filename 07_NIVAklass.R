@@ -21,9 +21,11 @@
 # 
 # mvh Andre
 
-# See "NIVAklass_VR31.m" in folder Excel_files
 
 
+
+
+# This script is based on "NIVAklass_VR31.m" in folder "Excel_files"
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
 # Load libraries ----
@@ -126,12 +128,12 @@ data_O2vol_year <- O2vol_bunn %>%
   group_by(Year) %>%
   summarize(Value = min(O2vol_sample, na.rm = TRUE))
 
-# for n=1:NY
-# nget=find(year==YY(n));
-# uO2(n)=min(O2vol_bunn(nget));  % Mulig feil enhet 2017
-# uOS(n)=min(O2sat_bunn(nget));
-# end
-# uO2(YY==2017) = NaN;
+# NOTE - NOTE - NOTE - NOTE - NOTE
+# In this case, probably wrong unit was used for O2vol in 2017 (see graph above)
+# We therefore delete O2vol_bun in 2017
+sel <- year(O2vol_bunn$Time) %in% 2017; sum(sel)
+O2vol_bunn$O2vol_sample[sel] <- NA
+  
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
 #  Nutrients ----
@@ -329,7 +331,7 @@ data_for_summary_file <- all_statistics %>%
   select(vars) %>%
   rename(Sikt = Sikt_sum) 
 
-write.xlsx(data_for_summary_file, 
+write.xlsx(data_for_summary_file %>% as.data.frame(), 
            sprintf("Excel_files/%s_stats.xlsx", code), 
            row.names = FALSE)
 
@@ -407,19 +409,19 @@ setCellValue(
 
 setCellValue(
   cells[["128.4"]], 
-  subset(data_nutrients_overall, Variable == "TP" & Season == "Summer")$Value[1])
+  subset(data_nutrients_overall, Variable == "TP" & Season == "Winter")$Value[1])
 setCellValue(
   cells[["129.4"]], 
-  subset(data_nutrients_overall, Variable == "PO4" & Season == "Summer")$Value[1])
+  subset(data_nutrients_overall, Variable == "PO4" & Season == "Winter")$Value[1])
 setCellValue(
   cells[["130.4"]], 
-  subset(data_nutrients_overall, Variable == "TN" & Season == "Summer")$Value[1])
+  subset(data_nutrients_overall, Variable == "TN" & Season == "Winter")$Value[1])
 setCellValue(
   cells[["131.4"]], 
-  subset(data_nutrients_overall, Variable == "NO3" & Season == "Summer")$Value[1])
+  subset(data_nutrients_overall, Variable == "NO3" & Season == "Winter")$Value[1])
 setCellValue(
   cells[["132.4"]], 
-  subset(data_nutrients_overall, Variable == "NH4" & Season == "Summer")$Value[1])
+  subset(data_nutrients_overall, Variable == "NH4" & Season == "Winter")$Value[1])
 
 setCellValue(cells[["135.4"]], data_O2vol_overall$Value[1])  
 setCellValue(cells[["136.4"]], data_O2sat_overall$Value[1])  
@@ -500,8 +502,12 @@ data.frame(Type = 1:9, perc90)
 example <- read.table("Excel_files/veileder_eksempel_side_216.txt", dec = ",", header = FALSE)
 colnames(example) <- c("Date", "Depth", "KlfA")
 example$Date <- dmy(example$Date)
+
+# Get Chl a values for months February - October (as in Veileder example)
 klfa <- example %>%
   filter(month(Date) %in% 2:10) %>%
   pull(KlfA)
+
+# Calculate 90% percentile for each percentile type (type = 1-9)
 perc90 <- 1:9 %>% purrr::map_dbl(~quantile(klfa, 0.9, type=.))   # 0.9 percentile of numbers 1-18 using type 1-9
 tibble(Type = 1:9, perc90)
