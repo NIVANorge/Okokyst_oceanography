@@ -23,9 +23,29 @@
 
 
 
-
-
 # This script is based on "NIVAklass_VR31.m" in folder "Excel_files"
+
+# Please note that in this specific case (station VR31), oxygen concentration in 2017 is deleted (See "NOTE" below)
+# - must be checked according to data
+
+# Input of this script:
+#   NetCDF file (file name "fn", folder "folder_data")
+#   Name of station (in this case "Tilremsfjorden")
+#   (Note: the station code, in this example "VR31", is extracted based on the file name)
+# Output of this script:
+#   One excel file (here "VR31_stats.xlsx") with per-year statistics, written from scratch
+#   One excel file (here "NIVAklass_VR31.xlsx") with classification (based on entire time series), based on "NIVAklass_kystvann.xlsx"
+#   Some writing to screen   
+
+# File overview of folder "Excel_files":
+#   "NIVAklass_kystvann.xlsx" - template file used for making "NIVAklass_VR31.xlsx" - needs to be there!
+#   "VR31_stats.xlsx"     - result file 1
+#   "NIVAklass_VR31.xlsx" - result file 2
+#   "NIVAklass_kystvann.xltx" - the basis of the xlsx template file (took this file and saved as xlsx)
+#   "NIVAklass_VR31.m" - Matlab script, basis for this script
+#   "VR31_stats_from_MATLAB.xlsx"     - result 1 of the Matlab script
+#   "NIVAklass_VR31_from_MATLAB.xlsx" - result 2 of the Matlab script
+#   "veileder_eksempel_side_216.txt" - data from the Veileder, usied in Appendix 2 in this script
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
 # Load libraries ----
@@ -57,9 +77,10 @@ dir(folder_data, "*.nc")
 
 # Define file name and station name
 fn <- "VR31_2014_2018.nc"
-name='Tilremsfjorden'
+name ='Tilremsfjorden'
 
-# Extract station code from file name
+# Extract station code from file name, assuming that it is on the form "code_year_year"
+# I.e. extracting everything to the left of the first underscore
 code <- stringr::str_extract(fn, "^[^_]+(?=_)")
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
@@ -382,7 +403,7 @@ rows <- getRows(sheet) # get all the rows
 cells <- getCells(rows) # returns all non empty cells
 # getCellValue(cells[["4.4"]])
 setCellValue(cells[["4.3"]], name)    # Set C4 cell
-setCellValue(cells[["4.5"]], code)    # Set F4 cell
+setCellValue(cells[["4.6"]], code)    # Set F4 cell
 setCellValue(cells[["6.3"]], lat) 
 setCellValue(cells[["7.3"]], lon) 
 setCellValue(cells[["24.4"]], data_klfa_overall$Value[1])   # Set D24 cell
