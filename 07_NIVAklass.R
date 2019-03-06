@@ -64,17 +64,20 @@ code <- stringr::str_extract(fn, "^[^_]+(?=_)")
 #  Read station data and depth ----
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
 
+ncin <- nc_open(paste0(folder_data, "/", fn))
+
 # station data
 lon = ncvar_get(ncin,"lon")
 lat = ncvar_get(ncin,"lat")
 
 # Print station info
-cat(code, ": ", name, " N", lat, " E", lon, sep = "")
+cat(code, ": ", name, " N", lat, " E", lon, "\n", sep = "")
 
 # Depths
 z     <- ncin$dim$depth$vals
 z_nut <- ncin$dim$depth_nut$vals
 
+nc_close(ncin)
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
 # Check file info ----
@@ -174,12 +177,14 @@ uNH4  <- NH4 %>% group_by(Time) %>% summarize(Average = sum(NH4*Weight)) %>% mut
 uSiO2 <- SiO2 %>% group_by(Time) %>% summarize(Average = sum(SiO2*Weight)) %>% mutate(Variable = "SiO2")
 
 # Secchi depth, treated by itself (raw data is already one value per sampling occasion)
+ncin <- nc_open(paste0(folder_data, "/", fn))
 usikt <- data.frame(
   Time = as.POSIXct(ncvar_get(ncin, "time") + 1, tz = "UTC", origin = "1970-01-01"),
   Average = ncvar_get(ncin,"secchi"),
   Variable = "Sikt",
   stringsAsFactors = FALSE
 )
+nc_close(ncin)
 
 # Plots for sanity check (plot one by one)
 ggplot(TP, aes(Time, TotP, color = factor(Depth))) + geom_line() + geom_point() +
@@ -252,6 +257,7 @@ ggplot(KlfA, aes(Time, KlfA, color = factor(Depth))) + geom_line() + geom_point(
 
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
+#  Klorofyll A, get 90 percentile value ----
 #  This method need spesial attention if NaN exist in the 
 #  profiles
 #
@@ -265,23 +271,24 @@ ggplot(KlfA, aes(Time, KlfA, color = factor(Depth))) + geom_line() + geom_point(
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
 
 percentile_type <- 7
-# Run ?quantile for description of types
+# Run ?quantile for description of types. Also see appendix at end of this file
 
 if (lat > 62){
-  data_klfa_year <- uKlfA %>%
-    filter(Month %in% 3:9) %>%   # Mars til Spetember, se s. 138 i Veileder 02:2018
-    group_by(Year) %>%
-    summarize(Value = quantile(Average, 0.9, type = percentile_type))
+  include_months <- 3:9
 } else {
-  data_klfa_year <- uKlfA %>%
-    filter(Month %in% 2:10) %>%
-    group_by(Year) %>%
-    summarize(Value = quantile(Average, 0.9, type = percentile_type))
+  include_months <- 2:10
 }
 
+data_klfa_year <- uKlfA %>%
+  filter(Month %in% include_months) %>%   # Mars til Spetember, se s. 138 i Veileder 02:2018
+  group_by(Year) %>%
+  summarize(Value = quantile(Average, 0.9, type = percentile_type))
+
 # Another plot for sanity check
+# Depth averaged data for selected months showns as black dots
+# Annual 90th percentiles (based on selected months) showns as black dots
 ggplot(KlfA, aes(Time, KlfA, color = factor(Depth))) + geom_line() + geom_point() +
-  geom_line(data = uKlfA, aes(y = Average), color = "black", size = 1) +
+  geom_point(data = uKlfA %>% filter(Month %in% include_months), aes(y = Average), color = "black", size = 2) +
   geom_point(data = data_klfa_year, aes(x = ymd_hms(paste(Year, "07 01 00:00:00")), y = Value), size = 3, color = "red")
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
@@ -322,7 +329,9 @@ data_for_summary_file <- all_statistics %>%
   select(vars) %>%
   rename(Sikt = Sikt_sum) 
 
-write.xlsx(data_for_summary_file, sprintf("Excel_files/%s_stats.xlsx", code))
+write.xlsx(data_for_summary_file, 
+           sprintf("Excel_files/%s_stats.xlsx", code), 
+           row.names = FALSE)
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
 #  Stats for the whole period ----
@@ -330,15 +339,15 @@ write.xlsx(data_for_summary_file, sprintf("Excel_files/%s_stats.xlsx", code))
 
 # Annual minimum values ('na.rm = TRUE' means that NAs are ignored)
 data_O2sat_overall <- O2sat_bunn %>%
-  summarize(Value = min(O2sat_sample, na.rm = TRUE))
+  summarize(Value = min(O2sat_sample, na.rm = TRUE) %>% round(2))
 
 data_O2vol_overall <- O2vol_bunn %>%
-  summarize(Value = min(O2vol_sample, na.rm = TRUE))
+  summarize(Value = min(O2vol_sample, na.rm = TRUE) %>% round(2))
 
 # Average per season
-data_nutrients_season_overall <- data_nutrients %>%
+data_nutrients_overall <- data_nutrients %>%
   group_by(Variable, Season) %>%
-  summarize(Season_average = mean(Average, na.rm = TRUE)) %>%
+  summarize(Value = mean(Average, na.rm = TRUE) %>% round(2)) %>%
   ungroup()
 
 
@@ -346,11 +355,11 @@ data_nutrients_season_overall <- data_nutrients %>%
 if (lat > 62){
   data_klfa_overall <- uKlfA %>%
     filter(Month %in% 3:9) %>%   # Mars til Spetember, se s. 138 i Veileder 02:2018
-    summarize(Value = quantile(Average, 0.9, type = percentile_type))
+    summarize(Value = quantile(Average, 0.9, type = percentile_type) %>% round(2))
 } else {
   data_klfa_overall <- uKlfA %>%
     filter(Month %in% 2:10) %>%
-    summarize(Value = quantile(Average, 0.9, type = percentile_type))
+    summarize(Value = quantile(Average, 0.9, type = percentile_type) %>% round(2))
 }
 
 
@@ -362,46 +371,113 @@ if (lat > 62){
 # Note: package xlsx doesn't work using the xltx file. File can be read but not opened by Excel later
 # Solution: The template must be saved as an xlsx file first
 file <- "Excel_files/NIVAklass_kystvann.xltx"      # doesn't work
-file <- "C:/Data/temp/NIVAklass_kystvann1.xlsx"    # does work
+file <- "Excel_files/NIVAklass_kystvann.xlsx"      # does work
 # "C:\Data\temp\NIVAklass_kystvann1.xlsx"
 wb <- loadWorkbook(file)
 sheets <- getSheets(wb)
 sheet <- sheets[["Klassifisering"]] # extract the second sheet
-sheet$getLastRowNum()
 rows <- getRows(sheet) # get all the rows
 cells <- getCells(rows) # returns all non empty cells
-getCellValue(cells[["3.1"]])
-getCellValue(cells[["24.2"]])
-getCellValue(cells[["24.4"]])         # = D24
-setCellValue(cells[["24.4"]], 2.45)   # Set D24 cell
-getCellValue(cells[["24.4"]])         # Check again
-saveWorkbook(wb, "Excel_files/test5.xlsx")
+# getCellValue(cells[["4.4"]])
+setCellValue(cells[["4.3"]], name)    # Set C4 cell
+setCellValue(cells[["4.5"]], code)    # Set F4 cell
+setCellValue(cells[["6.3"]], lat) 
+setCellValue(cells[["7.3"]], lon) 
+setCellValue(cells[["24.4"]], data_klfa_overall$Value[1])   # Set D24 cell
+# getCellValue(cells[["24.4"]])         # Check 
+setCellValue(
+  cells[["120.4"]], 
+  subset(data_nutrients_overall, Variable == "TP" & Season == "Summer")$Value[1])   # Set D120 cell
+setCellValue(
+  cells[["121.4"]], 
+  subset(data_nutrients_overall, Variable == "PO4" & Season == "Summer")$Value[1])   # Set D121 cell
+setCellValue(
+  cells[["122.4"]], 
+  subset(data_nutrients_overall, Variable == "TN" & Season == "Summer")$Value[1])   # etc.
+setCellValue(
+  cells[["123.4"]], 
+  subset(data_nutrients_overall, Variable == "NO3" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["124.4"]], 
+  subset(data_nutrients_overall, Variable == "NH4" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["125.4"]], 
+  subset(data_nutrients_overall, Variable == "Sikt" & Season == "Summer")$Value[1])
 
 
-% Write station data to xls
-disp('Writing to NIVAklass...')
-xlswrite(xls,cellstr(name),'Klassifisering','C4');
-xlswrite(xls,cellstr(code),'Klassifisering','F4');
-xlswrite(xls,lat,'Klassifisering','C6');
-xlswrite(xls,lon,'Klassifisering','C7');
-% Write stat results to xls
-xlswrite(xls,KlfA_P90,'Klassifisering','D24');
+setCellValue(
+  cells[["128.4"]], 
+  subset(data_nutrients_overall, Variable == "TP" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["129.4"]], 
+  subset(data_nutrients_overall, Variable == "PO4" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["130.4"]], 
+  subset(data_nutrients_overall, Variable == "TN" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["131.4"]], 
+  subset(data_nutrients_overall, Variable == "NO3" & Season == "Summer")$Value[1])
+setCellValue(
+  cells[["132.4"]], 
+  subset(data_nutrients_overall, Variable == "NH4" & Season == "Summer")$Value[1])
 
-xlswrite(xls,TP_sum,   'Klassifisering','D120');
-xlswrite(xls,PO4_sum,  'Klassifisering','D121');
-xlswrite(xls,TN_sum,   'Klassifisering','D122');
-xlswrite(xls,NO3_sum,  'Klassifisering','D123');
-xlswrite(xls,NH4_sum,  'Klassifisering','D124');
-xlswrite(xls,sikt_mean,'Klassifisering','D125');
+setCellValue(cells[["135.4"]], data_O2vol_overall$Value[1])  
+setCellValue(cells[["136.4"]], data_O2sat_overall$Value[1])  
 
-xlswrite(xls,TP_win,   'Klassifisering','D128');
-xlswrite(xls,PO4_win,  'Klassifisering','D129');
-xlswrite(xls,TN_win,   'Klassifisering','D130');
-xlswrite(xls,NO3_win,  'Klassifisering','D131');
-xlswrite(xls,NH4_win,  'Klassifisering','D132');
+saveWorkbook(wb, sprintf("Excel_files/NIVAklass_%s.xlsx", code))
 
-xlswrite(xls,O2_min,   'Klassifisering','D135');
-xlswrite(xls,OS_min,   'Klassifisering','D136');
+
+
+# =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
+# Read the result from NIVAklass ----
+#
+# You must set Vanntype, Salinitet etc. in the Excel sheet first...
+# 
+# =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o
+
+file <- sprintf("Excel_files/NIVAklass_%s.xlsx", code)
+file <- sprintf("Excel_files/NIVAklass_%s.xlsx", code)
+wb <- loadWorkbook(file)
+sheets <- getSheets(wb)
+sheet <- sheets[["Klassifisering"]] # extract the second sheet
+rows <- getRows(sheet) # get all the rows
+cells <- getCells(rows) # returns all non empty cells
+
+cat('Reading from NIVAklass...\n')
+nEQR = getCellValue(cells[["147.7"]])    # G147
+WQ = getCellValue(cells[["147.5"]])      # E147
+
+cat(' \n',
+    '=========================================\n',
+    ' NIVAklass result\n',
+    '=========================================\n',
+    'Water quality for station ', code, "\n",
+    'WQ = ', WQ, "\n",
+    'nEQR = ', nEQR, "\n")
+
+
+# =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
+# Numbers for tables in word report ----
+# =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
+
+cat('=========================================\n',
+    ' Numbers for the tables in word report\n',
+    '=========================================\n',
+    ' Klf a (P90):', data_klfa_overall$Value[1],  'µg/L\n',
+    ' \n',
+    ' Siktdyp:', subset(data_nutrients_overall, Variable == "Sikt" & Season == "Summer")$Value[1], 'm\n')
+
+for (season in c("Summer", "Winter")){
+  cat("\n", season, "values:\n")
+  subset(data_nutrients_overall, Season == season) %>%
+    select(-Season) %>%
+    spread(Variable, Value) %>%
+    select(TP, PO4, TN, NO3, NH4, SiO2) %>%
+    as.data.frame() %>%
+    print(row.names = FALSE)
+}
+
+
 
 
 # =o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o=o==
