@@ -79,6 +79,12 @@ dir(folder_data, "*.nc")
 fn <- "VR31_2014_2018.nc"
 name ='Tilremsfjorden'
 
+# For Skagerrak historic
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Skagerrak/xlsbase_Vannmiljo" # /VT10_2013_2016.nc"
+dir(folder_data, "*.nc")
+fn <- "VT10_2013_2016.nc"
+name ='VT10'
+
 # Extract station code from file name, assuming that it is on the form "code_year_year"
 # I.e. extracting everything to the left of the first underscore
 code <- stringr::str_extract(fn, "^[^_]+(?=_)")
