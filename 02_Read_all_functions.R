@@ -49,6 +49,104 @@ okokyst_read_nc <- function(fn, variable, ctd_variable, report = FALSE,
   df2
   }
 
+
+#
+# Like okokyst_read_nc but automatically finds dimension (i.e. 'ctd_variable' and 'read_depth_nut' is superfluous)
+# - Used in script 09
+# Also able to read variables without depth, such as Secchi depth (Depth is set to NA)
+# Also: 
+# - returns data in tidy format: one column 'Variable' has variable name and unit
+# - another column is named Value and has the actual data
+#
+
+okokyst_read_nc2 <- function(fn, variable, report = FALSE, 
+                            folder_data = "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/ncbase_OKOKYST"){
+  if (report)
+    cat(fn, variable, "\n")
+  ncin <- nc_open(paste0(folder_data, "/", fn))
+  lon <- ncvar_get(ncin,"lon")
+  lat <- ncvar_get(ncin,"lat")
+  ProjectId <- ncvar_get(ncin,"ProjectId")
+  StationId <- ncvar_get(ncin,"StationId")
+  time <- ncvar_get(ncin, "time")
+  time <- as.POSIXct(time + 1, tz = "UTC", origin = "1970-01-01")   # add 1 second in order to get a time, not  date
+  ndim <- length(ncin$var[[variable]]$dim)
+  dim1 <- ncin$var[[variable]]$dim[[1]]$name
+  units <- ncin$var[[variable]]$units
+  if (dim1 != "time"){
+    depth <- ncvar_get(ncin, dim1)
+    value <- ncvar_get(ncin, variable)
+    nc_close(ncin)
+    df <- data.frame(Depth = depth, Value = value)
+    # Set column names to equal time. Must add t_ in front in order to be "legal" column names
+    colnames(df)[-1] <- paste0("t_", time)
+    # Rearrange data from wide to tall, so time becomes a variable
+    df2 <- tidyr::gather(df, "Time", "Value", -Depth)
+    df2$Time <- lubridate::ymd_hms(sub("t_","",df2$Time))  # Change time variable from character to time 
+  } else {
+    time <- ncvar_get(ncin, dim1)
+    value <- ncvar_get(ncin, variable)
+    nc_close(ncin)
+    df2 <- data.frame(Depth = NA, Time = time, Value = value)
+    df2$Time <- as.POSIXct(df2$Time, origin = "1970-01-01", tz = "GMT")  # time variable:from number (UNIX time) to time
+  }
+  df2 <- data.frame(Variable = paste0(variable, "_", units), df2, stringsAsFactors = FALSE)
+  # Add name of file, longitude and latitude
+  df2 <- data.frame(Filename = fn, Long = lon, Lat = lat, ProjectId = ProjectId, StationId = StationId, 
+                    df2, 
+                    stringsAsFactors = FALSE)
+  if (variable %in% "time_nut"){
+    df2$Variable <- "time_nut_unix"
+    # df2$Value <- as.POSIXct(df2$Value, origin = "1970-01-01", tz = "GMT")
+  }
+  if (report){
+    cat("\n")
+    print(df2[1:3,])
+    cat("\n")
+  }
+  df2
+}
+
+# Test
+# fn <- "Glomfjord_data/ncbase_Glomfjord/Gl-1_2017.nc"
+# datafolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017"
+# df1 <- okokyst_read_nc2(fn, "salt", folder_data = datafolder)       # a CTD variable (data every meter depth)
+# df2 <- okokyst_read_nc2(fn, "TotP", folder_data = datafolder)       # a nutrient variable (4 dephts)
+# df3 <- okokyst_read_nc2(fn, "secchi", folder_data = datafolder)     # a variable without depth (time only)
+
+
+#
+# This uses 'okokyst_read_nc2' to read all variables in a file
+# Data are in tidy format so they are "stacked" inside the function
+#
+okokyst_readall_nc <- function(fn, report = FALSE, 
+                               folder_data = "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/ncbase_OKOKYST"){
+  ncin <- nc_open(paste0(folder_data, "/", fn))
+  if (report)
+    cat("File", fn, "is opened\n")
+  var_names <- names(ncin$var)   # Get all variable names
+  nc_close(ncin)
+  var_names <- var_names[!var_names %in% c("depth1", "depth2", "lat", "lon", "ProjectId", "StationId")]
+  for (var in var_names){
+    if (report)
+      cat("", var)
+    df <- okokyst_read_nc2(fn, var, folder_data = folder_data)
+    if (var == var_names[1]){
+      df_collected <- df
+    } else {
+      df_collected <- bind_rows(df_collected, df)
+    }
+  }
+  if (report)
+    cat("\n")
+  df_collected
+}
+
+# fn <- "Glomfjord_data/ncbase_Glomfjord/Gl-1_2017.nc"
+# datafolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017"
+# df <- okokyst_readall_nc(fn, folder_data = datafolder, report = TRUE)       # a CTD variable (data every meter depth)
+
+
 #
 # Make ggplot-ready data (including interpolation)
 #
