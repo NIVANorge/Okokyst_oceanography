@@ -258,6 +258,53 @@ stations_oceanic %>% walk(~save_scatter(., "Oceanic"))
 stations_fjord %>% walk(~save_scatter(., "Fjord"))
 ```
 
+### Difference vs. time, function
+```{r, fig.height=4, fig.width=5, echo=FALSE, warning=FALSE}
+plot_diff <- function(codename){
+  df_chla2_sel <- df_chla2 %>% 
+    filter(StationCodeName == codename & !is.na(Abs_difference_10m_vs_05m))
+  absdiff_max <- df_chla2_sel$Abs_difference_10m_vs_05m %>% 
+    abs() %>% max() %>% ceiling()
+  if (absdiff_max > 2){
+    absdiff_breaks <- c(0,0.1,0.25,0.5,1,2, absdiff_max)
+    absdiff_colors <- c("green4","green","orange","orange3","red","red4")
+  } else {
+    absdiff_breaks <- c(0,0.1,0.25,0.5,1,2)
+    absdiff_colors <- c("green4","green","orange","orange3","red")
+  }
+  gg <- ggplot(df_chla2_sel, 
+             aes(x = Time, 
+                 y = Abs_difference_10m_vs_05m, 
+                 color = cut(abs(Abs_difference_10m_vs_05m), 
+                             absdiff_breaks, include.lowest = TRUE))
+       ) +
+  geom_line(color = "black") +
+  geom_point(size = 3) +
+  scale_color_manual("Absolute\ndifference", values = absdiff_colors, na.value = "grey30") +
+  scale_y_continuous(breaks = seq(-10, 10, 1)) +
+  geom_hline(yintercept = 0) +
+  expand_limits(y = c(-1,1)) +
+  labs(title = codename, x = "Time", y = "Chl a difference (10 m minus 5 m)")
+  gg
+  }
+plot_diff("VR31 Tilremsfjorden")
+
+save_diff <- function(codename, subfolder){
+  gg <- plot_diff(codename)
+  ggsave(sprintf("Figures_10m_vs_5m/%s/%s Diff.png", subfolder, codename), gg,     width = 5, height = 4, dpi = 500)
+}
+# save_diff("VR31 Tilremsfjorden", "Oceanic")
+```
+#### Difference vs. time, oceanic stations
+```{r, fig.height=5, fig.width=5}
+stations_oceanic %>% walk(~save_diff(., "Oceanic"))
+```
+
+#### Difference vs. time, fjord stations
+```{r, fig.width=5, fig.height=5}
+stations_fjord %>% walk(~save_diff(., "Fjord"))
+```
+
 
 ### Time series plot, function
 ```{r, fig.height=4, fig.width=5, echo=FALSE, warning=FALSE}
