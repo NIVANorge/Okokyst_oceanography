@@ -1,0 +1,651 @@
+---
+title: "12_QA_2019_from_excel"
+author: "DHJ"
+date: "13 1 2020"
+output: html_document
+---
+
+QA for ØKOKYST 2019 report (January 2020)  
+- mail fra Andre 10.1.2020 (pluss 8.1)
+- Statistikk (Perc90 etc) beregnet i 
+  `K:\Avdeling\214-Oseanografi\DATABASER\OKOKYST_2017\AqM_download_2019`,   
+  filer: AqM_2019_Skag_des2019.xlsx + (for VT4) AqM_2019_Ferrybox_des2019.xlsx
+- Perc90 er så tatt over i 
+  `K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Årsrapport2019\Vannmassene\NIVAklass`
+  der selve klassifiseringen er gjort i Excel-ark  
+- Analyserapporter finnes i (eksempel):
+K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Hydrografi\Analyserapport_2017
+   
+**Veileder:**  
+- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- Chlorophyll: page 91.   
+"I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
+"Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
+90% percentiles should be used   
+  
+- Also see calculation example on on page 187-189, and the comment on page 189:  
+"Det gjøres oppmerksom på at dataprogrammene som beregner 90-persentil, gjerne benytter ulike metoder". We use the Excel method PERCENTILE.EXC, corresponding to type 6 quantiles in R  
+  
+- Nutrients: page 102   
+Vinter er november til og med februar   
+Sommer er juni til og med august  
+
+  
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+# library(niRvana)
+
+source("12_QA_2019_from_excel_functions.R")
+
+# RColorBrewer::display.brewer.all()
+```
+
+
+## 2. Read file used by André  
+```{r}
+
+fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/AqM_download_2019/AqM_2019_Skag_des2019.xlsx"
+df_chl <- read_excel(fn, sheet = "klfa")
+
+
+```
+
+## 3. ChlA, check quantiles  
+  
+Note: see part 5 for same check, based on raw data  
+  
+Using type 6 quantiles, which correspond to PERCENTILE.EXC in Excel (see https://www.r-bloggers.com/the-problem-with-percentiles-2/)  
+  
+- Compare with 90% percentiles in the same Excel work sheet ("klfa" work sheet)
+- All quantiles are OK  
+```{r}
+# df_chl$StationCode %>% unique() %>% dput()
+# order_as_excel <- c("VT10", "VT67", "VT3", "VT65", "VT66", "VT2", "VT68")
+
+order_as_excel <- unique(df_chl$StationCode)
+  
+df_quantiles <- df_chl %>%
+  mutate(StationCode = factor(StationCode, levels = order_as_excel)) %>%  # same order as in Excel file
+  group_by(StationCode) %>%
+  summarise_at(c("KlfA 0m", "KlfA 5m", "KlfA 10m", "KlfA max 0-10"), 
+               quantile, probs = 0.9, na.rm = TRUE, type = 6)    # type 6 = PERCENTILE.EXC() in Excel
+
+df_quantiles
+
+```
+
+### Plot quantiles I   
+A single ggplot  
+```{r}
+# print(ggplot(df, aes(x = `KlfA max 0-10`)) + geom_histogram())
+
+ggplot(df_chl, aes(x = `KlfA max 0-10`)) + 
+  geom_histogram() +
+  geom_vline(data = df_quantiles, aes(xintercept = `KlfA max 0-10`), color = "red") +
+  facet_wrap("StationCode")
+  labs(title = name)
+
+```
+
+### Plot for quantiles II    
+Separate plots  
+(Tech. note: could have used map2 or pmap instaed of for-else)
+```{r}
+# print(ggplot(df, aes(x = `KlfA max 0-10`)) + geom_histogram())
+
+df_list <- df_chl %>%
+  mutate(StationCode = factor(StationCode, levels = unique(df_chl$StationCode))) %>%  # same order as in Excel file
+  split(.$StationCode)
+
+
+for (name in names(df_list)){
+  q90 <- df_quantiles %>%
+    filter(StationCode == name) %>%
+    pull(`KlfA max 0-10`)
+  print(
+    ggplot(df_list[[name]], aes(x = `KlfA max 0-10`)) + 
+      geom_histogram() +
+      geom_vline(xintercept = q90, color = "red") +
+      labs(title = name)
+  )
+  } 
+
+```
+
+## 4. Plot ChlA for each depth    
+```{r}
+
+df_chl %>%
+  select(StationCode:`KlfA 10m`) %>%
+  pivot_longer(cols = `KlfA 0m`:`KlfA 10m`, names_to = "Depth", values_to = "KlfA") %>%
+  ggplot(aes(SampleDate, KlfA, color = Depth)) +
+  geom_line() +
+  geom_hline(data = df_quantiles, aes(yintercept = `KlfA max 0-10`), color = "red") +
+  facet_wrap("StationCode")
+
+```
+
+
+## 5. Checking based on raw data  
+
+### Read raw data  
+Pretty big (30 seconds)  
+```{r}
+
+fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/AqM_download_2019/AqM_2019_Skag_des2019.xlsx"
+# For column names
+dat_broad <- AqMexport_read_waterchemistry(fn, reformat_long = FALSE)   # 30 seconds
+dat1 <- AqMexport_reformat_long(dat_broad, remove_duplicates = FALSE)
+dat2 <- AqMexport_remove_duplicates(dat1)
+
+# Check
+dat2 %>%
+  filter(Variable %in% "KlfA" & Depth1 %in% c(0,5,10) & year(Time) == 2017 & month(Time) == 2)
+
+```
+
+
+
+### ChlA test plot
+```{r}
+# table(dat2$Variable)
+# table(dat2$StationCode)
+
+df_chl_all <- dat2 %>%
+  filter(Variable %in% "KlfA" & Depth1 %in% c(0,5,10) & !is.na(Value)) %>%
+  group_by(StationId, StationCode, StationName, Time, Depth1, Depth2, Variable) %>%
+  summarise(Value = first(Value[!is.na(Value)]), Flag = first(Flag[!is.na(Value)])) %>%
+  arrange(StationCode, Depth1, Time) %>%
+  ungroup()
+
+df_chl <- df_chl_all %>%
+  filter(Time >= ymd("2017-01-01"))
+
+ggplot(df_chl_all, aes(Time, Value, color = factor(Depth1))) +
+  geom_line() +
+  geom_point(aes(shape = is.na(Flag)), size = 1) +
+  facet_wrap("StationCode")
+
+ggplot(df_chl, aes(Time, Value, color = factor(Depth1))) +
+  geom_line() +
+  geom_point(aes(shape = is.na(Flag)), size = 1) +
+  facet_wrap("StationCode")
+
+
+```
+
+### ChlA, check quantiles  
+
+As section 3, only that section 3 is based on the already extracted data in that sheet
+
+```{r}
+
+order_as_excel <- c("VT10", "VT67", "VT3", "VT65", "VT66", "VT2", "VT68")
+
+df_chl_summ <- df_chl %>%
+  filter(month(Time) %in% 2:10 & StationCode %in% order_as_excel) %>%     # Feb - October data
+  mutate(StationCode = factor(StationCode, levels = order_as_excel)) %>%  # same order as in Excel file
+  select(StationCode, Time, Depth1, Variable, Value) %>%
+  pivot_wider(names_from = Depth1, values_from = Value, names_prefix = "Depth") %>%
+  mutate(Max = pmax(Depth0, Depth5, Depth10, na.rm = TRUE))
+df_chl_summ
+
+df_quantiles2 <- df_chl_summ %>%
+  group_by(StationCode) %>%
+  summarise_at(c("Depth0", "Depth5", "Depth10", "Max"), 
+               quantile, probs = 0.9, na.rm = TRUE, type = 6)
+
+df_quantiles2
+
+  
+```
+
+## 6. Nutrients, check sums
+
+
+### Check occurence of "NO3+NO2-N" vs "NO2-N" and "NO3-N"  
+- **Not necessary, mostly for curiosity**
+- Until 2007, "NO2-N" and "NO3-N" was measured separately   
+- 2009-2015, both approaches were used   
+- Since 2017, only "NO3+NO2-N" has been measured  
+- 2009-2012, also PON mesured in 30-50% of cases  
+```{r}
+# table(dat2$Variable)
+
+check <- dat2 %>%
+  filter(Variable %in% c("TOTN", "NH4-N", "NO3+NO2-N", "NO2-N", "NO3-N", "PON") & !is.na(Value)) %>%
+  select(StationCode, Time, Depth1, Variable, Value) %>%
+  pivot_wider(names_from = Variable, values_from = Value)
+# Check occurence of "NO3+NO2-N" vs "NO2-N" and "NO3-N"
+
+# Only for curiosity
+# table(!is.na(check[,"NO3+NO2-N"]), !is.na(check[,"NO2-N"]))  # never both, a few times none
+# table(!is.na(check[,"NO3+NO2-N"]), !is.na(check[,"NO3-N"]))  # never both, a few times none
+# table(!is.na(check[,"TOTN"]), !is.na(check[,"NO3-N"]))  # never both, a few times none
+# table(!is.na(check[,"PON"]))
+# table(!is.na(check[,"PON"]), !is.na(check[,"NO3-N"]))      # never both
+# table(!is.na(check[,"PON"]), !is.na(check[,"NO3+NO2-N"]))  # both in 482 cases
+
+#
+# Show use of 
+#
+check %>% 
+  group_by(Year = year(Time)) %>% 
+  summarize(Perc_sum_NO2NO3 = 100*mean(!is.na(`NO3+NO2-N`)),
+            Perc_NO3 = 100*mean(!is.na(`NO3-N`)),
+            Perc_PON = 100*mean(!is.na(PON)),
+            N = n())
+
+```
+
+
+
+### Check occurence of P variables   
+- **Not necessary, mostly for curiosity**
+- Until 1998, only phosphate      
+- Since 2001, also TOTP  
+- Particulate: POP 2009-2012, TOTP_P from 2017 onwards
+```{r}
+# table(dat2$Variable)
+
+check <- dat2 %>%
+  filter(Variable %in% c("TOTP", "TOTP_P", "PO4-P", "POP") & !is.na(Value)) %>%
+  select(StationCode, Time, Depth1, Variable, Value) %>%
+  pivot_wider(names_from = Variable, values_from = Value)
+# Check occurence of "NO3+NO2-N" vs "NO2-N" and "NO3-N"
+
+# check %>% filter(!is.na(TOTP))
+# check %>% filter(year(Time) >= 2017)
+
+#
+# Show use of P vars
+#
+dat2 %>%
+  filter(Variable %in% c("TOTP", "TOTP_P", "PO4-P", "POP") & !is.na(Value)) %>%
+  group_by(Year = year(Time), Variable) %>%
+  count() %>%
+  pivot_wider(names_from = Variable, values_from = n)
+
+```
+
+
+
+### Check sums of N variables   
+```{r}
+check_sums_n1(dat2)
+check_sums_n2(dat2)
+check_sums_n3(dat2)
+```
+
+### N, plot biggest discrepancy   
+- Plots all N variables (colors/circles), plus the sum of inorganic N (NH4 + NO3 + NO2) in black  
+- Dotted vertical line(s) indicates where the sum is 15% higher than TOTN (example: VT67, 0 m)  
+```{r}
+
+nutrient_plot_n("VT66", 0)
+nutrient_plot_n("VT67", 0)
+
+```
+
+
+### Check sums of P variables   
+Check whether  
+1) TotP is smaller or equal to phosphate + particular P (TOTP_P)   
+2) TotP is smaller or equal to phosphate     
+In case 1), some are a lot off. This sum is not used by André
+
+```{r}
+
+check_sums_p1(dat2, max_n = 1000)
+check_sums_p2(dat2)
+
+```
+
+### P, plot biggest discrepancy   
+-170%   
+
+```{r}
+
+nutrient_plot_p("VT3", 10)
+
+```
+
+
+```{r}
+
+# TOTP vs PO3 + TOTP_P
+# TOTP too small in 63 cases (ca 4%)
+df <- dat2 %>%
+  filter(Variable %in% c("TOTP", "TOTP_P", "PO4-P") & !is.na(Value)) %>%
+  select(StationCode, Time, Depth1, Variable, Value) %>%
+  pivot_wider(names_from = Variable, values_from = Value) %>%
+  mutate(Check = (TOTP - `TOTP_P` - `PO4-P`)/TOTP*100) %>%      # Check = difference in % of TOTN
+  filter(!is.na(Check))
+cat("======================================================================\n")
+cat("Check whether TotP is smaller or equal to inorganic P + TOTP_P\n")
+cat("Observations per year:\n")
+table(year(df$Time))
+if (sum(df$Check < 0)){
+  cat("TotP smaller than inorganic P + TOTP_P in", sum(df$Check < 0), "cases (see table)\n\n")
+  table(df$Check > 0)
+  df[df$Check < 0,] %>% arrange(Check)
+} else {
+  cat("\nTotP never smaller than inorganic P + TOTP_P\n\n")
+}
+
+# ggplot(df, aes(Check)) + geom_histogram()
+
+
+# TOTP vs PO3
+# TOTP too small in 23 cases (ca 4%)
+df <- dat2 %>%
+  filter(Variable %in% c("TOTP", "PO4-P") & !is.na(Value)) %>%
+  select(StationCode, Time, Depth1, Variable, Value) %>%
+  pivot_wider(names_from = Variable, values_from = Value) %>%
+  mutate(Check = (TOTP - `PO4-P`)/TOTP*100) %>%      # Check = difference in % of TOTN
+  filter(!is.na(Check))
+cat("======================================================================\n")
+cat("Check whether TotP is smaller or equal to inorganic P\n")
+cat("Observations per year:\n")
+table(year(df$Time))
+if (sum(df$Check < 0)){
+  cat("TotP smaller than inorganic P in", sum(df$Check < 0), "cases (see table)\n\n")
+  table(df$Check > 0)
+  df[df$Check < 0,] %>% arrange(Check)
+} else {
+  cat("\nTotP never smaller than inorganic P \n\n")
+}
+
+# For extra check
+if (FALSE){
+  df[df$Check < 0,] %>%
+    filter(year(Time) >= 2017) %>%
+    arrange(StationCode, Time)
+}
+
+```
+
+## 7. Nutrients, compare values in Excel sheet  
+
+- Compares mean values calculated from raw data with values in the "NIVAKlass" excel sheets  
+
+### Nutrients, get mean values from raw data  
+- 
+```{r}
+# dput(unique(dat2$Variable))
+
+# Total fosfor (μg P/l), vinter
+# Fosfat-fosfor (μg P/l), vinter
+# Total nitrogen (μg N/l), vinter
+# Nitrat-nitrogen (μg N/l), vinter
+# Ammonium-nitrogen (μg N/l), vinter
+
+NIVAklass_get_meanvalues <- function(years, data, vars, months, depths = c(0,5,10)){
+  data %>%
+    filter(Variable %in% vars & 
+             Depth1 %in% depth &
+             month(Time) %in% months & year(Time) %in% years &
+             StationCode %in% order_as_excel) %>% 
+    group_by(StationCode, Variable) %>%
+    summarize(Value = mean(Value)) %>%
+    mutate(Variable = factor(Variable, levels = vars)) %>%
+    arrange(Variable)
+}
+
+NIVAklass_summervalues <- function(years, data){
+  NIVAklass_get_meanvalues(years = years, 
+                           data = data, 
+                           # Same order as in NIVAklass Excel sheet:
+                           vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
+                           months <- c(6,7,8)
+                           )
+}
+
+NIVAklass_wintervalues <- function(years, data){
+  NIVAklass_get_meanvalues(years = years, 
+                           data = data, 
+                           # Same order as in NIVAklass Excel sheet:
+                           vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
+                           months <- c(1,2,12)
+                           )
+}
+
+NIVAklass_nutrientvalues <- function(years, data){
+  df_nut_summer <- NIVAklass_summervalues(years, data) %>%
+    mutate(Season = "Summer") %>%
+    select(StationCode, Season, Variable, Value)
+  df_nut_winter <- NIVAklass_wintervalues(years, data) %>%
+    mutate(Season = "Winter") %>%
+    select(StationCode, Season, Variable, Value)
+  bind_rows(df_nut_summer, df_nut_winter) %>%
+    arrange(StationCode, Season, Variable)
+ }
+
+df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, dat2)
+
+df_mean_nutrients %>%
+  filter(StationCode == "VT67" & Season == "Winter")
+
+```
+
+```{r}
+NIVAklass_compare_with_excel <- function(stationcode, 
+                                         nutrientvalues,
+                                         excel_folder,
+                                         excel_filename_pattern = "NIVAklass_%s_2019.xlsx",
+                                         rows_summer = 98:102,
+                                         rows_winter = 106:110){
+  fn <- sprintf(excel_filename_pattern, stationcode)
+  klass_sheet <- read_excel(paste0(excel_folder, "/", fn), 
+                            sheet = "Klassifisering",            # HARD-CODED STUFF
+                            range = "B22:D155")                  # HARD-CODED STUFF
+  names(klass_sheet)[1] <- "Indicator"
+  klass_sheet <- klass_sheet[,c(1,3)]
+  # Summer
+  result1 <- klass_sheet[98:102,]                                # HARD-CODED STUFF
+  result1$Value_from_R <- nutrientvalues %>% 
+    filter(StationCode == stationcode & Season == "Summer") %>%
+    pull(Value)
+  # Winter
+  result2 <- klass_sheet[106:110,]                               # HARD-CODED STUFF
+  result2$Value_from_R <- nutrientvalues %>% 
+    filter(StationCode == stationcode & Season == "Winter") %>%
+    pull(Value)
+  # Add difference in percent
+  bind_rows(result1, result2) %>%
+    mutate(Diff_perc = round((Verdi-Value_from_R)/Value_from_R*100, 1))
+  }
+
+# Test
+nivaklass_folder_2019 <- "K:/Prosjekter/Sjøvann/KYSTOVERVÅKING ØKOKYST/KYSTOVERVÅKING ØKOKYST 2017-2020/ØKOKYST DP Skagerrak O-17089_19089/Årsrapport2019/Årsrapport 2019 data/Vannmassene/NIVAklass"
+
+NIVAklass_compare_with_excel("VT67",
+                             df_mean_nutrients,
+                             excel_folder = nivaklass_folder_2019)
+
+```
+
+
+### Check winter values, one file  
+```{r}
+
+station <-"VT67"
+df_nut_winter %>% filter(StationCode == station)
+
+klass_folder <- "K:/Prosjekter/Sjøvann/KYSTOVERVÅKING ØKOKYST/KYSTOVERVÅKING ØKOKYST 2017-2020/ØKOKYST DP Skagerrak O-17089_19089/Årsrapport2019/Årsrapport 2019 data/Vannmassene/NIVAklass"
+fn <- paste0(klass_folder, "/NIVAklass_", station, "_2019.xlsx")
+fn <- "NIVAklass_", station, "_2019.xlsx")
+klass_sheet <- read_excel(fn, sheet = "Klassifisering", range = "B22:D155")
+names(klass_sheet)[1] <- "Indicator"
+check <- klass_sheet[106:110,] 
+check$Value_from_R <- df_nut_winter %>% 
+  filter(StationCode == station) %>% 
+  pull(Value)
+check <- check %>%
+  mutate(Diff_perc = round((Verdi-Value_from_R)/Value_from_R*100, 1))
+check
+
+```
+
+### Check one file, function    
+```{r}
+check
+station <-"VT67"
+df_nut %>% filter(StationCode == station)
+
+klass_folder <- "K:/Prosjekter/Sjøvann/KYSTOVERVÅKING ØKOKYST/KYSTOVERVÅKING ØKOKYST 2017-2020/ØKOKYST DP Skagerrak O-17089_19089/Årsrapport2019/Årsrapport 2019 data/Vannmassene/NIVAklass"
+fn <- paste0(klass_folder, "/NIVAklass_", station, "_2019.xlsx")
+klass_sheet <- read_excel(fn, sheet = "Klassifisering", range = "B22:D155")
+names(klass_sheet)[1] <- "Indicator"
+indicators <- c("Total fosfor (µg P/l), vinter", "Fosfat-fosfor (µg P/l), vinter", 
+                "Total nitrogen (µg N/l), vinter", "Nitrat-nitrogen (µg N/l), vinter", 
+                "Ammonium-nitrogen (µg N/l), vinter")
+check <- klass_sheet[106:110,] 
+check$Value_from_R <- df_nut %>% filter(StationCode == station) %>% pull(Value)
+check <- check %>%
+  mutate(Diff_perc = round((Verdi-Value_from_R)/Value_from_R*100, 1))
+check
+
+```
+
+## 8. Check files from Bergen      
+See mail from Caroline Mengeot <caroline.mengeot@niva.no>   
+Sent: torsdag 9. januar 2020 14:47  
+```{r}
+
+# Norskehavet Sør I
+folder1 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor"
+
+# Norskehavet Sør II
+folder2 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_Aquakompetanse/xlsbase/TilAquamonitor"
+folder3 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_MagneAuren/xlsbase/TilAquamonitor"
+folder4 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_SNO/xlsbase/TilAquamonitor"
+
+
+
+```
+
+
+### Read data  
+```{r}
+folder <- folder1
+
+# Get CTD files
+fns <- dir(folder, ".xls") %>% grep("CTD", ., value = TRUE)
+fns <- fns[!grepl("^~", fns)]   # remove temporary files (opened excel files)
+fns
+
+i <- 1
+fn <- paste0(folder, "/", fns[1])
+dat_header <- read_excel(fn, "data", n_max = 2)
+dat <- read_excel(fn, "data", col_names = FALSE, skip = 2)
+
+if (ncol(dat) == ncol(dat_header)){
+  names(dat) <- names(dat_header)  
+} else {
+  cat("Not same number of columns!\n")
+}
+
+head(dat)
+
+
+```
+
+### Check variables in each file  
+```{r}
+sheets_in_file <- function(folder, fn){
+  fn_full <- paste0(folder, "/", fn)
+  sheets <- readxl::excel_sheets(fn_full)
+  data.frame(folder = folder, 
+             file = fn, 
+             columns = paste(sheets, collapse = ","),
+             stringsAsFactors = FALSE)
+}
+
+# Test
+# sheets_in_file(folder1, fns[1])
+
+sheets_in_folder <- function(folder){
+  fns <- dir(folder, ".xls") %>% grep("CTD", ., value = TRUE)
+  fns <- fns[!grepl("^~", fns)]   # remove temporary files (opened excel files)
+  fns
+  fns %>% map_df(~sheets_in_file(folder, .))
+}
+
+vars_in_file <- function(fn, sheetname, folder){
+  fn_full <- paste0(folder, "/", fn)
+  dat_header <- read_excel(fn_full, , n_max = 2)
+  data.frame(folder = folder, 
+             file = fn, 
+             columns = paste(names(dat_header), collapse = ","),
+             stringsAsFactors = FALSE)
+}
+# Test
+# vars_in_file(fns[1], "data", folder = folder1)
+
+vars_in_folder <- function(folder, filenames, sheetnames){
+  pmap_df(
+    list(filenames, sheetnames),
+    vars_in_file,
+    folder = folder
+    )
+}
+
+sheets_in_folder(folder1)
+vars_in_folder(folder1, fns, c("data","data","Data"))
+
+
+
+```
+
+
+### Plot profiles  
+```{r}
+xtabs(~StationCode, dat)
+xtabs(~Date, dat)
+
+plot_ctdprofile_station <- function(stationcode){
+  gg <- dat %>%
+    filter(StationCode %in% stationcode) %>%
+    mutate(Date = factor(Date)) %>%
+    ggplot(aes(Saltholdighet, Depth1)) +
+    geom_line() +
+    scale_y_reverse() + 
+    facet_wrap("Date")
+  print(gg)
+}
+
+plot_ctdprofile_station("VR51")
+
+?dplyr
+```
+
+
+
+```{r}
+
+unique()
+
+plot_ctdprofile_station("VR51", Saltholdighet)
+plot_ctdprofile_station("VR51", Temperatur)
+plot_ctdprofile_station("VR51", Oksygen)
+plot_ctdprofile_station("VR51", Oksygenmetning)
+
+
+```
+
+
+
+```{r}
+
+```
+
