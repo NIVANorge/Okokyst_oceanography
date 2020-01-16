@@ -1,0 +1,215 @@
+---
+title: "Read ØKOKYST data from NIVAbasen"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: yes
+---
+
+
+
+For Økokyst 2017-2019 report (Jan 2020)  However, not immediately useful, as the data in NIVAbasen seems to stop in Feb. 2018  
+
+
+
+## 1a. Libraries
+```{r}
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+
+library(niRvana)
+source("11_Read_from_Nivabasen_functions.R")
+
+```
+
+## 1b. Set username + password
+```{r}
+
+set_credentials()
+
+```
+
+## 2. Get projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+# Search for Økokyst projects
+proj_names <- grep("økokyst", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE)
+
+# Filter for Skagerrak
+proj_names <- grep("skagerrak",proj_names, value = TRUE, ignore.case = TRUE)
+
+# Add extras (KYO + indre and ytre Oslofjord)
+proj_names <- c(
+  proj_names, 
+  "Nordsjøen Nord",
+  grep("indre oslo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE), 
+  grep("ytre oslo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE), 
+  grep("kyo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE)
+)
+
+
+# get PROJECT_ID
+proj_id <- df_projects %>% 
+  filter(PROJECT_NAME %in% proj_names) %>%
+  pull(PROJECT_ID)
+
+# Get extra PROJECT_IDs from Steilene (to find Indre Oslofjord projects)
+df <- get_nivabase_data("select * from NIVADATABASE.PROJECTS_STATIONS where STATION_NAME like 'Steilene%'") 
+proj_id_extra <- df_projects %>% filter(PROJECT_ID %in% df$PROJECT_ID) %>% pull(PROJECT_ID)
+
+proj_id <- c(proj_id, proj_id_extra) %>% unique()
+
+#
+```
+
+
+## 3. Get stations
+
+```{r}
+
+df_stations <- get_nivabase_selection(
+  "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME",
+  "PROJECTS_STATIONS",
+  "PROJECT_ID",
+  proj_id
+)   
+
+df_stations_geomid <- get_nivabase_selection(
+  "STATION_ID, GEOM_REF_ID",
+  "STATIONS",
+  "STATION_ID",
+  df_stations$STATION_ID
+)   
+
+df_stations_pos <- get_nivabase_selection(
+  "SAMPLE_POINT_ID, LATITUDE, LONGITUDE",
+  "SAMPLE_POINTS",
+  "SAMPLE_POINT_ID",
+  df_stations_geomid$GEOM_REF_ID,
+  owner = "NIVA_GEOMETRY"
+)   
+
+df_stations <- df_stations %>% 
+  left_join(df_stations_geomid) %>%
+  left_join(df_stations_pos, by = c("GEOM_REF_ID" = "SAMPLE_POINT_ID"))
+
+# df_stations %>% filter(STATION_CODE == "514")
+df_stations <- df_stations %>%
+  filter(LONGITUDE > 7.34 & LATITUDE < 60)
+
+nrow(df_stations)  # 1247
+
+# Make interactive map if you wish 
+make_map <- FALSE
+if (make_map){
+  df <- df_stations %>% filter(STATION_NAME %in% "Håøyfjorden")
+  library(leaflet)
+  leaflet() %>%
+    addTiles() %>%  # Default OpenStreetMap map tiles
+    addMarkers(lng = df$LONGITUDE, lat = df$LATITUDE,
+               popup = paste(df$STATION_CODE, df$STATION_NAME))
+}
+```
+
+## 4. Samples from one station    
+Last date is 2.2.2018  
+With "date visualisation" (could be better using label) 
+```{r, fig.width=8, fig.height=2}
+
+df_station <- df_stations %>% 
+  filter(STATION_NAME %in% "Håøyfjorden")
+
+station_id <- unique(df_station$STATION_ID)
+
+df_samples <- get_nivabase_selection(
+  "WATER_SAMPLE_ID, STATION_ID, SAMPLE_DATE, DEPTH1, DEPTH2",
+  "WATER_SAMPLES",
+  "STATION_ID",
+  station_id
+)   
+
+df <- tibble(Date = unique(df_samples$SAMPLE_DATE), Y = 0.5)
+
+
+df %>%
+  filter(year(Date) >= 2015) %>%
+  ggplot() +
+  geom_text(aes(Date, Y, label = Date), angle = 90, size = 2) +
+  theme(axis.text = element_blank(),
+        axis.title = element_blank())
+
+
+```
+
+## 5. Data from one date  
+```{r}
+unique(df_samples$SAMPLE_DATE) %>% tail(5)
+
+sample_date <- df_samples %>%
+  filter(floor_date(SAMPLE_DATE, "days") == ymd("2018-02-02")) %>%
+  pull(SAMPLE_DATE) %>%
+  unique()
+
+df_data <- get_nivabase_selection(
+  "WATER_SAMPLE_ID, METHOD_ID, VALUE, UNCERTAINTY, FLAG1, FLAG2, REMARK",
+  "WATER_CHEMISTRY_VALUES",
+  "WATER_SAMPLE_ID",
+  subset(df_samples, SAMPLE_DATE %in% sample_date)$WATER_SAMPLE_ID 
+)   
+
+df_methods <- get_nivabase_selection(
+  "METHOD_ID, NAME, UNIT, BASIS_ID",
+  "METHOD_DEFINITIONS",
+  "METHOD_ID",
+  unique(df_data$METHOD_ID) 
+)   
+
+df_data <- df_data %>% 
+  left_join(df_methods) %>%
+  left_join(df_samples)
+
+  
+```
+
+### Plot data from this date  
+```{r}
+
+ggplot(df_data, aes(VALUE, DEPTH1)) + 
+  geom_point(size = 0.5) +
+  scale_y_reverse() +
+  facet_wrap(vars(NAME))
+
+```
+
+## Get data for this station, 2016 - 2018  
+Using function get_data_given_date()
+```{r}
+
+sample_dates <- df_samples %>%
+  filter(SAMPLE_DATE >= ymd("2016-01-01")) %>%
+  pull(SAMPLE_DATE) %>%
+  unique()
+
+
+dat <- get_data_given_date(sample_dates, df_samples, df_methods)
+
+```
+
+### Plot
+```{r}
+dat %>%
+  filter(NAME %in% "Saltholdighet") %>%
+  mutate(Date = as.character(round_date(SAMPLE_DATE, "day"))) %>%
+  ggplot(aes(VALUE, DEPTH1, color = Date)) + 
+  geom_point(size = 0.5) +
+  scale_y_reverse() 
+  # facet_wrap(vars(Date))
+
+```
+
+
