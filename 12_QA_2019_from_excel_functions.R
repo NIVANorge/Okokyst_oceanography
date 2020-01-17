@@ -3,8 +3,8 @@
 #
 
 AqMexport_read_waterchemistry <- function(filename, reformat_long = TRUE, remove_duplicates = TRUE, sheetname = "WaterChemistry"){
-  # Read top 2 lines, only for the column names
-  df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 2)
+  # Read top line, only for the column names
+  df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 0)
   # Read data. All data is read as text (strings) and later converted, due to the "<" signs
   df_chem <- read_excel(fn, sheet = "WaterChemistry", col_names = FALSE, skip = 2, col_types = "text")
   # Set column names (copy them from df_names)
@@ -318,19 +318,3 @@ check_sums_p2 <- function(data, max_n = 30){
   }
 
 
-#
-# FUNCTIONS FOR CTD QC ----
-#
-
-plot_ctdprofile_station <- function(stationcode, variable, data){
-  variable_q <- enquo(variable)
-  gg <- data %>%
-    filter(StationCode %in% stationcode) %>%
-    mutate(Date = factor(Date)) %>%
-    ggplot(aes(!!variable_q, Depth1)) +
-    geom_path() +
-    scale_y_reverse() + 
-    facet_wrap("Date") +
-    labs(title = paste(stationcode, "-", deparse(substitute(variable))))
-  print(gg)
-}

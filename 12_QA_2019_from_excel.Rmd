@@ -5,8 +5,11 @@ date: "13 1 2020"
 output: html_document
 ---
 
-QA for ØKOKYST 2019 report (January 2020)  
-- mail fra Andre 10.1.2020 (pluss 8.1)
+# QA for ØKOKYST 2019 report (January 2020)    
+
+**Section 2-7 = "André part"**  
+See  
+- mail from Andre 10.1.2020 (pluss 8.1)
 - Statistikk (Perc90 etc) beregnet i 
   `K:\Avdeling\214-Oseanografi\DATABASER\OKOKYST_2017\AqM_download_2019`,   
   filer: AqM_2019_Skag_des2019.xlsx + (for VT4) AqM_2019_Ferrybox_des2019.xlsx
@@ -15,6 +18,8 @@ QA for ØKOKYST 2019 report (January 2020)
   der selve klassifiseringen er gjort i Excel-ark  
 - Analyserapporter finnes i (eksempel):
 K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Hydrografi\Analyserapport_2017
+
+
    
 **Veileder:**  
 - `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
@@ -514,138 +519,6 @@ check$Value_from_R <- df_nut %>% filter(StationCode == station) %>% pull(Value)
 check <- check %>%
   mutate(Diff_perc = round((Verdi-Value_from_R)/Value_from_R*100, 1))
 check
-
-```
-
-## 8. Check files from Bergen      
-See mail from Caroline Mengeot <caroline.mengeot@niva.no>   
-Sent: torsdag 9. januar 2020 14:47  
-```{r}
-
-# Norskehavet Sør I
-folder1 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor"
-
-# Norskehavet Sør II
-folder2 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_Aquakompetanse/xlsbase/TilAquamonitor"
-folder3 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_MagneAuren/xlsbase/TilAquamonitor"
-folder4 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_SNO/xlsbase/TilAquamonitor"
-
-
-
-```
-
-
-### Read data  
-```{r}
-folder <- folder1
-
-# Get CTD files
-fns <- dir(folder, ".xls") %>% grep("CTD", ., value = TRUE)
-fns <- fns[!grepl("^~", fns)]   # remove temporary files (opened excel files)
-fns
-
-i <- 1
-fn <- paste0(folder, "/", fns[1])
-dat_header <- read_excel(fn, "data", n_max = 2)
-dat <- read_excel(fn, "data", col_names = FALSE, skip = 2)
-
-if (ncol(dat) == ncol(dat_header)){
-  names(dat) <- names(dat_header)  
-} else {
-  cat("Not same number of columns!\n")
-}
-
-head(dat)
-
-
-```
-
-### Check variables in each file  
-```{r}
-sheets_in_file <- function(folder, fn){
-  fn_full <- paste0(folder, "/", fn)
-  sheets <- readxl::excel_sheets(fn_full)
-  data.frame(folder = folder, 
-             file = fn, 
-             columns = paste(sheets, collapse = ","),
-             stringsAsFactors = FALSE)
-}
-
-# Test
-# sheets_in_file(folder1, fns[1])
-
-sheets_in_folder <- function(folder){
-  fns <- dir(folder, ".xls") %>% grep("CTD", ., value = TRUE)
-  fns <- fns[!grepl("^~", fns)]   # remove temporary files (opened excel files)
-  fns
-  fns %>% map_df(~sheets_in_file(folder, .))
-}
-
-vars_in_file <- function(fn, sheetname, folder){
-  fn_full <- paste0(folder, "/", fn)
-  dat_header <- read_excel(fn_full, , n_max = 2)
-  data.frame(folder = folder, 
-             file = fn, 
-             columns = paste(names(dat_header), collapse = ","),
-             stringsAsFactors = FALSE)
-}
-# Test
-# vars_in_file(fns[1], "data", folder = folder1)
-
-vars_in_folder <- function(folder, filenames, sheetnames){
-  pmap_df(
-    list(filenames, sheetnames),
-    vars_in_file,
-    folder = folder
-    )
-}
-
-sheets_in_folder(folder1)
-vars_in_folder(folder1, fns, c("data","data","Data"))
-
-
-
-```
-
-
-### Plot profiles  
-```{r}
-xtabs(~StationCode, dat)
-xtabs(~Date, dat)
-
-plot_ctdprofile_station <- function(stationcode){
-  gg <- dat %>%
-    filter(StationCode %in% stationcode) %>%
-    mutate(Date = factor(Date)) %>%
-    ggplot(aes(Saltholdighet, Depth1)) +
-    geom_line() +
-    scale_y_reverse() + 
-    facet_wrap("Date")
-  print(gg)
-}
-
-plot_ctdprofile_station("VR51")
-
-?dplyr
-```
-
-
-
-```{r}
-
-unique()
-
-plot_ctdprofile_station("VR51", Saltholdighet)
-plot_ctdprofile_station("VR51", Temperatur)
-plot_ctdprofile_station("VR51", Oksygen)
-plot_ctdprofile_station("VR51", Oksygenmetning)
-
-
-```
-
-
-
-```{r}
 
 ```
 
