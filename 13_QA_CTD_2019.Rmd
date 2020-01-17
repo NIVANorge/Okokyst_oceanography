@@ -1,0 +1,317 @@
+---
+title: "12_QA_2019_from_excel"
+author: "DHJ"
+date: "13 1 2020"
+output: html_document
+---
+
+# QA for CTDs - ØKOKYST 2019 report (January 2020)    
+- Check Excel files from Bergen      
+- Only CTDs
+- See mail from Caroline Mengeot <caroline.mengeot@niva.no>, Sent: torsdag 9. januar 2020 14:47  
+
+   
+**Veileder:**  
+- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- Chlorophyll: page 91.   
+"I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
+"Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
+90% percentiles should be used   
+  
+- Also see calculation example on on page 187-189, and the comment on page 189:  
+"Det gjøres oppmerksom på at dataprogrammene som beregner 90-persentil, gjerne benytter ulike metoder". We use the Excel method PERCENTILE.EXC, corresponding to type 6 quantiles in R  
+  
+- Nutrients: page 102   
+Vinter er november til og med februar   
+Sommer er juni til og med august  
+
+  
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+# library(niRvana)
+
+source("13_QA_CTD_2019_functions.R")
+
+# RColorBrewer::display.brewer.all()
+```
+
+
+## 2. Folders and file information 
+
+### Folders
+```{r}
+
+basefolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/"
+
+# Norskehavet Sør I
+folder1 <- "OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor"
+
+# Norskehavet Sør II
+folder2 <- "OKOKYST_NH_Sor2_Aquakompetanse/xlsbase/TilAquamonitor"
+folder3 <- "OKOKYST_NH_Sor2_MagneAuren/xlsbase/TilAquamonitor"
+folder4 <- "OKOKYST_NH_Sor2_SNO/xlsbase/TilAquamonitor"
+
+
+```
+
+
+### Check file names, sheet names and variable names   
+Makes 'fileinfo' which contains all of this info (one line per file)  
+```{r}
+ 
+folder <- folder1
+# 1. Find sheet names here: (can be commented out afterwards)
+# sheets_in_folder(folder)                                 
+# 2. Enter the sheet names here:  
+f1 <- vars_in_folder(folder, c("data","data","Data"))       
+
+folder <- folder2
+# sheets_in_folder(folder)
+f2 <- vars_in_folder(folder, c("Rådata","Rådata","Data"))
+
+folder <- folder3
+# sheets_in_folder(folder)
+f3 <- vars_in_folder(folder, c("Data","Rådata","Data"))
+
+folder <- folder4
+# sheets_in_folder(folder)
+f4 <- vars_in_folder(folder, c("Data","Rådata","Data","Data"))
+
+fileinfo <- bind_rows(f1, f2, f3, f4)
+
+fileinfo
+
+```
+
+### Check whick variables are in each file  
+```{r}
+
+files_lacking_var <- function(variablename, fileinformation = fileinfo){
+  data.frame(
+    Variable = variablename, 
+    Lacking = fileinformation %>%
+      filter(!grepl(variablename, Variables)) %>% 
+      nrow(),
+    stringsAsFactors = FALSE
+  )
+}
+
+# Variables of first file:
+# i <- 1
+# fn <- with(fileinfo[1,], paste0(basefolder, Folder, "/", File))
+# read_excel(fn, sheet = fileinfo[1,"Sheet"], n_max = 0) %>% names() %>% dput()
+
+c("StationId", "StationCode", "Date", "Depth1", 
+  "Saltholdighet", "Temperatur", "Oksygen", "Oksygenmetning", "Metode") %>% map_df(files_lacking_var)
+
+# 9 files does not contain StationId - they have StationCode instead
+fileinfo %>%
+  filter(!grepl("StationId", Variables))
+
+# 4 files does not contain StationCode - they have StationID instead
+fileinfo %>%
+  filter(!grepl("StationCode", Variables))
+grep("StationCode", fileinfo$Variables)
+
+```
+
+### Get stations  
+Make 'fileinfo_stations'   
+- has one row per file and station  
+- deleting one station from one file (just 1 observation)
+```{r}
+
+i <- 1
+fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
+dat <- read_excel_droplines(fn, sheet = fn
+                            )
+
+#
+# Makes a data frame for a given file, with one row per station
+#
+# NOTE: Global variable: 'fileinfo'
+get_stations <- function(file_number){
+  i <- file_number
+  fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
+  dat <- read_excel_droplines(fn, sheet = fileinfo$Sheet[i])
+  if ("StationCode" %in% names(dat)){
+    df <- dat %>% count(StationCode)
+      StationCode_var = "StationCode"
+  } else {
+    df <- dat %>% count(StationId)
+    StationCode_var = "StationId"
+    names(df)[1] <- "StationCode"
+  }
+  df$StationCode <- as.character(df$StationCode)
+  data.frame(
+    Folder = fileinfo$Folder[i],
+    File = fileinfo$File[i],
+    Sheet = fileinfo$Sheet[i],
+    StationCode_var = StationCode_var,
+    File_no = i,
+    df,
+    stringsAsFactors = FALSE
+  )
+}
+
+# Test
+# get_stations(1)
+# get_stations(4)
+
+fileinfo_stations <- seq_len(nrow(fileinfo)) %>% map_df(get_stations)
+
+# Deletes staton with 1 observation
+fileinfo_stations <- 
+  fileinfo_stations %>% filter(n >= 5)
+
+fileinfo_stations
+
+```
+
+## 3. Plots
+
+### Plot profile, example    
+```{r}
+
+# Data from file 1  
+i <- 1
+fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
+dat <- read_excel_droplines(fn, sheet = fileinfo[i,"Sheet"])
+plot_ctdprofile_station("VR51", dat, "Saltholdighet")
+
+```
+
+### Functions
+```{r}
+
+#
+# Read data based on given row number in 'fileinfo_stations' file
+#
+# Note: 'fileinfo_stations' is global
+#
+read_data_fileinfoline <- function(i){
+    fn <- with(fileinfo_stations[i,], 
+               paste0(basefolder, Folder, "/", File))
+    dat <- read_excel_droplines(fn, 
+                                sheet = fileinfo_stations$Sheet[i])
+    dat
+}
+
+#
+# Plot all casts, function
+# Note: 'fileinfo_stations' is global
+#
+plot_cast_all <- function(){
+  for (i in seq_len(nrow(fileinfo_stations))){
+    dat <- read_data_fileinfoline(i)
+    file_no <- fileinfo_stations$File_no[i]
+    plot_cast_station(fileinfo_stations$StationCode[i], 
+                            dat, 
+                            titletext = paste0("Plot ", i, ", File ", file_no)
+    )
+  }
+}
+
+
+#
+# Plot all profiles, function      
+#
+# Note: 'fileinfo_stations' is global
+#
+plot_ctdprofile_all <- function(variable){
+  for (i in seq_len(nrow(fileinfo_stations))){
+    dat <- read_data_fileinfoline(i)
+    file_no <- fileinfo_stations$File_no[i]
+    file_no <- fileinfo_stations$File_no[i]
+    plot_ctdprofile_station(fileinfo_stations$StationCode[i], 
+                            dat, 
+                            variable, 
+                            titletext = paste0("Plot ", i, ", File ", file_no, " -")
+    )
+  }
+}
+
+# plot_ctdprofile_all("Saltholdighet")
+
+```
+
+### Plot all casts  
+- Also check max depth    
+**Notes**  
+- 14. Dec 2018 (VR51) seems not to have reached the bottom (or was taken in the wrong place)  
+- 14. Dec 2018 (VR51) also occurs in two files (files named "2018" and "2019"), which may lead 
+```{r}
+
+plot_cast_all()
+
+```
+
+### Plot salinity
+```{r}
+
+plot_ctdprofile_all("Saltholdighet")
+
+```
+
+### Plot temperature  
+Seems suspicious (see data in next chunk):  
+- File 5, Vr52 26.4.2018 - temp + salinity down to 2.5 meters (3 measurements)   
+- File 12, station 68870, 2018-08-21 - temp + salinity down to 0.5 meters  
+
+```{r}
+
+plot_ctdprofile_all("Temperatur")
+
+```
+
+#### Checking some data  
+- File 5, Vr52 26.4.2018
+```{r}
+# File 3, Vr52 26.4.2018
+dat <- read_data_fileinfoline(8)
+dat %>%
+  filter(floor_date(Date, "day") == ymd("2018-04-26")) %>%
+  head(30)
+
+# File 12, station 68870, 2018-08-21
+dat <- read_data_fileinfoline(14)
+dat %>%
+  filter(floor_date(Date, "day") == ymd("2018-08-21")) %>%
+  head(30)
+# dat %>%
+#   filter(floor_date(Date, "day") == ymd("2018-08-21")) %>%
+#   tail(80)
+
+```
+
+### Plot oxygen   
+- As mentioned above, 14. Dec 2018 (VR51) seems not to have reached the bottom (or was taken in the wrong place)  
+    - Seems likely that bottom oxygen is lower than shown  
+- File 3 (plot 5) VR51: Oxygen in Jan and Feb 2019 is very unstable - sensor problem?  
+- File 4 (plot 7) VR52: Zero oxygen in March 2017
+- File 4 (plot 7) VR52: Zero oxygen in top of water column in Sept 2017 (doesn't matter for classification)  
+- File 6 (plot 9) VR52: Error in oxygen in October 2019 (zero)
+- File 6 (plot 9) VR52: Error in oxygen in October 2019 (much too high)  
+- File 10 (plot 12) 68870: Suspicuous O2 values near bottom in October?
+- File 12 (plot 14) 68870: O2 looks a bit suspicuous in Oct 2018, but seems ok
+```{r}
+
+plot_ctdprofile_all("Oksygen")
+
+```
+
+### Oxygen saturation  
+```{r}
+
+plot_ctdprofile_all("Oksygenmetning")
+
+```
