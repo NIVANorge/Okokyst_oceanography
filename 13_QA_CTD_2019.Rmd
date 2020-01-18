@@ -2,7 +2,12 @@
 title: "12_QA_2019_from_excel"
 author: "DHJ"
 date: "13 1 2020"
-output: html_document
+output:
+  html_document:
+    keep_md: true
+    toc: true
+    toc_float: true
+
 ---
 
 # QA for CTDs - ØKOKYST 2019 report (January 2020)    
@@ -26,8 +31,9 @@ Vinter er november til og med februar
 Sommer er juni til og med august  
 
   
+```{r, echo=FALSE, results='hide'}
+
 ## 1. Libraries
-```{r}
 
 library(dplyr)
 library(purrr)
@@ -45,10 +51,11 @@ source("13_QA_CTD_2019_functions.R")
 ```
 
 
-## 2. Folders and file information 
+## 1. Folders and file information 
+
+```{r, results='hide'}
 
 ### Folders
-```{r}
 
 basefolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/"
 
@@ -66,7 +73,7 @@ folder4 <- "OKOKYST_NH_Sor2_SNO/xlsbase/TilAquamonitor"
 
 ### Check file names, sheet names and variable names   
 Makes 'fileinfo' which contains all of this info (one line per file)  
-```{r}
+```{r, echo=FALSE}
  
 folder <- folder1
 # 1. Find sheet names here: (can be commented out afterwards)
@@ -92,13 +99,14 @@ fileinfo
 
 ```
 
-### Check whick variables are in each file  
-```{r}
+```{r check_Variables, echo=FALSE, results='hide'}
+
+### Check which variables are in each file  
 
 files_lacking_var <- function(variablename, fileinformation = fileinfo){
   data.frame(
     Variable = variablename, 
-    Lacking = fileinformation %>%
+    No_of_files_lacking = fileinformation %>%
       filter(!grepl(variablename, Variables)) %>% 
       nrow(),
     stringsAsFactors = FALSE
@@ -110,30 +118,33 @@ files_lacking_var <- function(variablename, fileinformation = fileinfo){
 # fn <- with(fileinfo[1,], paste0(basefolder, Folder, "/", File))
 # read_excel(fn, sheet = fileinfo[1,"Sheet"], n_max = 0) %>% names() %>% dput()
 
+#
+# Number of 
 c("StationId", "StationCode", "Date", "Depth1", 
   "Saltholdighet", "Temperatur", "Oksygen", "Oksygenmetning", "Metode") %>% map_df(files_lacking_var)
 
-# 9 files does not contain StationId - they have StationCode instead
-fileinfo %>%
-  filter(!grepl("StationId", Variables))
+#
+# 9 files contains StationCode, the rest have StationId
+#
+data.frame(
+  StationCode = grepl("StationCode", fileinfo$Variables),
+  StationId = grepl("StationId", fileinfo$Variables)
+)
 
-# 4 files does not contain StationCode - they have StationID instead
-fileinfo %>%
-  filter(!grepl("StationCode", Variables))
-grep("StationCode", fileinfo$Variables)
 
 ```
 
-### Get stations  
-Make 'fileinfo_stations'   
-- has one row per file and station  
-- deleting one station from one file (just 1 observation)
-```{r}
+```{r, echo=FALSE, results='hide'}
 
-i <- 1
-fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
-dat <- read_excel_droplines(fn, sheet = fn
-                            )
+### Get stations  
+# Make 'fileinfo_stations'   
+# - has one row per file and station  
+# - deleting one station from one file (just 1 observation)
+
+# Test
+# i <- 1
+# fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
+# dat <- read_excel_droplines(fn, sheet = fileinfo$Sheet[i])
 
 #
 # Makes a data frame for a given file, with one row per station
@@ -177,21 +188,80 @@ fileinfo_stations
 
 ```
 
-## 3. Plots
+## 2. Plot casts
 
-### Plot profile, example    
-```{r}
+```{r, echo=FALSE, results='hide'}
 
 # Data from file 1  
 i <- 1
 fn <- with(fileinfo[i,], paste0(basefolder, Folder, "/", File))
 dat <- read_excel_droplines(fn, sheet = fileinfo[i,"Sheet"])
-plot_ctdprofile_station("VR51", dat, "Saltholdighet")
+
+#
+### Time series plots, test
+#
+df <- dat %>%
+  filter(StationCode == "VR51") %>%
+  mutate(Depth = case_when(
+    Depth1 == 0 ~ 0,
+    Depth1 > 0 ~ round((Depth1+Depth2)/2, 0) 
+  ))
+
+# pie(rep(1,9), col = rainbow(n = 9, end = 0.75, v = 0.8))
+depths <- c(0, 1, 5, 10, 20, 50, 100, 200, max(df$Depth)-10)
+colors <- rainbow(n = 9, end = 0.75, v = 0.8)
+colors <- c("#18A439", "#6D8F00", "#8B7800", "#9A6100", "#9E4B3F", "#983861", "#882F77", "#6B3480", "#3C417E")
+names(colors) <- depths
+colors
+
+gg <- df %>%
+  filter(Depth %in% depths) %>%
+  mutate(Depth = factor(Depth)) %>%
+  ggplot(aes(Date, Saltholdighet, group = Depth, color = Depth)) +
+  geom_line() + geom_point(size = 1) +
+  scale_color_manual(values = colors) +
+  theme_bw()
+
+# library(colorspace)
 
 ```
 
+
+```{r, echo=FALSE, results='hide'}
+
+#
+# Plot profile and time series plot, example    
+#
+
+if (FALSE){
+  plot_ctdprofile_station("VR51", dat, "Saltholdighet")
+  plot_timeseries_station("VR51", dat, "Saltholdighet")
+}
+
+```
+
+```{r, echo=FALSE, results='hide'}
+
+### Test contour plot   
+# See script 06  
+# Didn't work that well
+
+
+if (FALSE){
+  source("02_Read_all_functions.R")
+  dat %>%
+    filter(StationCode == "VR51") %>%
+    rename(Depth = Depth1, Time = Date) %>%
+    okokyst_plot(., "Saltholdighet", ctd_variable = TRUE, binwidth = 20)
+}
+
+```
+
+
+
+```{r functions, echo = FALSE}
+
 ### Functions
-```{r}
 
 #
 # Read data based on given row number in 'fileinfo_stations' file
@@ -223,6 +293,23 @@ plot_cast_all <- function(){
 
 
 #
+# Plot all time series plots, function      
+#
+# Note: 'fileinfo_stations' is global
+#
+plot_timeseries_all <- function(variable){
+  for (i in seq_len(nrow(fileinfo_stations))){
+    dat <- read_data_fileinfoline(i)
+    file_no <- fileinfo_stations$File_no[i]
+    plot_timeseries_station(fileinfo_stations$StationCode[i], 
+                            dat, 
+                            variable, 
+                            titletext = paste0("Plot ", i, ", File ", file_no, " -")
+    )
+  }
+}
+
+#
 # Plot all profiles, function      
 #
 # Note: 'fileinfo_stations' is global
@@ -230,7 +317,6 @@ plot_cast_all <- function(){
 plot_ctdprofile_all <- function(variable){
   for (i in seq_len(nrow(fileinfo_stations))){
     dat <- read_data_fileinfoline(i)
-    file_no <- fileinfo_stations$File_no[i]
     file_no <- fileinfo_stations$File_no[i]
     plot_ctdprofile_station(fileinfo_stations$StationCode[i], 
                             dat, 
@@ -244,20 +330,24 @@ plot_ctdprofile_all <- function(variable){
 
 ```
 
-### Plot all casts  
+Plot all casts  
 - Also check max depth    
 **Notes**  
 - 14. Dec 2018 (VR51) seems not to have reached the bottom (or was taken in the wrong place)  
-- 14. Dec 2018 (VR51) also occurs in two files (files named "2018" and "2019"), which may lead 
+- 14. Dec 2018 (VR51) also occurs in two files (files named "2018" and "2019"), which may lead be aware so the resukts are not used twice  
 ```{r}
 
 plot_cast_all()
 
 ```
 
+## 3. Plot parameters
+
 ### Plot salinity
+
 ```{r}
 
+plot_timeseries_all("Saltholdighet")
 plot_ctdprofile_all("Saltholdighet")
 
 ```
@@ -269,6 +359,7 @@ Seems suspicious (see data in next chunk):
 
 ```{r}
 
+plot_timeseries_all("Temperatur")
 plot_ctdprofile_all("Temperatur")
 
 ```
@@ -305,13 +396,16 @@ dat %>%
 - File 12 (plot 14) 68870: O2 looks a bit suspicuous in Oct 2018, but seems ok
 ```{r}
 
+plot_timeseries_all("Oksygen")
 plot_ctdprofile_all("Oksygen")
 
 ```
 
-### Oxygen saturation  
+### Plot oxygen saturation  
+
 ```{r}
 
+plot_timeseries_all("Oksygenmetning")
 plot_ctdprofile_all("Oksygenmetning")
 
 ```
