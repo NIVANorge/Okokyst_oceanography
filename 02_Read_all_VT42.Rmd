@@ -1,0 +1,565 @@
+---
+title: "Reading all nc files"
+output: 
+  html_document: 
+    keep_md: yes
+    toc: yes
+---
+
+## Libraries and functions
+```{r}
+library(ncdf4)
+library(tidyverse)
+library(ggmap)
+library(readxl)
+
+# Function that needs to be run for plotting using image() or image.plot()
+transpose_for_image <- function(x) t(x[seq(nrow(x),1,-1),])
+
+# Load function okokyst_read_nc()
+source("02_Read_all_functions.R")
+
+# Maps for used with ggplot
+# map1 <- get_googlemap(c(lon=9, lat=62.5), zoom=4) %>% ggmap()
+# map2 <- get_googlemap(c(lon=9, lat=62.5), zoom=5) %>% ggmap()
+
+# Specify folder for nc files
+folder_data <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/ncbase_OKOKYST"
+
+```
+
+## Get station attributes
+```{r}
+fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_Hydrografi_Stasjoner_v5.xlsx"
+df_stations <- read_excel(fn) %>% 
+  rename(ProjectName = ProjcetName)
+df_stations$StationName[9] <- "Korsfjorden_Hord"
+df_stations$StationName[18] <- "Korsfjorden_Trønd"
+```
+
+## Test reads
+### Test read 1
+```{r}
+# dir(folder_data)
+df <- okokyst_read_nc("VT42_2011_2018.nc", "salt", ctd_variable = TRUE)
+
+df %>% 
+  arrange(Time, Depth) %>%
+  ggplot(aes(salt, Depth, color = Time)) +
+  geom_path() + 
+  scale_y_reverse()
+
+```
+
+### Test read 2
+```{r}
+# debugonce(okokyst_read_nc)
+df <- okokyst_read_nc("VT42_2011_2018.nc", "KlfA", ctd_variable = FALSE)
+
+df %>% 
+  arrange(Time, KlfA) %>%
+  ggplot(aes(Time, KlfA, color = factor(Depth))) +
+  geom_line()
+
+```
+
+## Read all variables from this station
+
+### List variables  
+```{r}
+# Filenames
+fn <- "VT42_2011_2018.nc"
+ncin <- nc_open(paste0(folder_data, "/", fn))
+names(ncin$var)
+
+```
+
+### Read dimensions
+```{r}
+
+time <- ncvar_get(ncin, "time")
+depth <- ncvar_get(ncin, "depth")
+depth_nut <- ncvar_get(ncin, "depth_nut")
+
+#### Turn time into time object
+time <- as.POSIXct(time, tz = "UTC", origin = "1970-01-01")
+
+```
+
+
+### Classify variables  
+1. CTD variables (many depths, 455 in this case)  
+2. Sample variables (from water samples, 10 depths in ths case)  
+3. Secchi depth (ends up with the CTD variables in this case) 
+
+```{r}
+if (FALSE){
+  x <- ncvar_get(ncin, "temp")
+  dim(x)[1]  # 455
+  x <- ncvar_get(ncin, "NO3")
+  dim(x)[1]  # 11
+}
+
+get_depth_dim <- function(variable){
+  x <- ncvar_get(ncin, variable)
+  dim(x)[1]  # 1
+}
+# get_depth_dim("temp")
+
+# 
+vars <- names(ncin$var)
+var_dims <- vars %>% map_int(get_depth_dim)
+
+# MAke vars_ctd anf vars_sample  
+vars_ctd <- vars[var_dims >= 20]
+vars_sample <- vars[var_dims < 20]
+
+cat("CTD variables\n")
+vars_ctd
+
+cat("Sample variables\n")
+vars_sample
+
+```
+
+
+### Get CTD variables
+```{r}
+okokyst_read_nc_safe <- safely(okokyst_read_nc)
+df_ctd_list <- vars_ctd %>% 
+  map(~okokyst_read_nc_safe(
+    "VT42_2011_2018.nc", 
+    ., 
+    ctd_variable = TRUE)
+    )
+
+names(df_ctd_list) <- vars_ctd
+  
+ok <- df_ctd_list %>% map_lgl(~is.null(.[[2]]))
+ok_i <- which(ok)
+# no 10 - secchi didn't work 
+
+# check timed
+if (FALSE){
+  t1 <- df_ctd_list[["temp"]][[1]] %>% pull(Time) %>% unique()
+  t2 <- df_ctd_list[["salt"]][[1]] %>% pull(Time) %>% unique()
+  t3 <- df_ctd_list[["O2vol"]][[1]] %>% pull(Time) %>% unique()
+  mean(t1 %in% t2)
+  mean(t2 %in% t1)
+  mean(t3 %in% t1)
+}
+
+# Start making df_ctd
+df_ctd <- df_ctd_list[["temp"]][[1]]  
+nrow(df_ctd)
+
+# dput(vars_ctd)
+vars_to_add <- c("salt", "turb", "fluor", "O2vol", "O2mg", "O2sat")
+
+# Add variables to df_ctd, one at a time
+for (var in vars_to_add){
+  df_ctd <- df_ctd %>%
+    full_join(df_ctd_list[[var]][[1]][c("Depth","Time", var)], 
+              by = c("Depth","Time"))
+  cat(var, ":", nrow(df_ctd), "\n")
+}
+# Add depths
+for (var in c("depth1","depth2")){
+  df_ctd <- df_ctd %>%
+    left_join(df_ctd_list[[var]][[1]][c("Depth", var)], 
+              by = c("Depth"))
+  cat(var, ":", nrow(df_ctd), "\n")
+}
+
+# Rearrange columns
+df_ctd <- df_ctd %>%
+  select(Filename:Depth, depth1, depth2, everything())
+df_ctd %>% names()
+  
+# Data density
+names(df_ctd) %>% map_df(~data.frame(., mean(is.finite(df_ctd[[.]]))))
+
+```
+
+#### Check 1  
+Max depth  
+```{r}
+df_ctd %>% 
+  filter(is.finite(temp)) %>%
+  group_by(Time) %>%
+  summarise(Max_depth = max(depth1)) %>%
+  ggplot(aes(Time, Max_depth)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Max depth for temperature")
+
+```
+
+#### Check 2
+```{r}
+t1 <- df_ctd %>% pull(Time) %>% unique()
+t1[1:5]
+
+df_ctd %>%
+  filter(Time %in% t1[1:20]) %>%
+  arrange(Time, Depth) %>%
+  ggplot(aes(temp, depth1, color = factor(Time))) +
+  geom_path() + 
+  scale_y_reverse()
+  
+df_ctd %>%
+  filter(Time %in% t1[1:20]) %>%
+  arrange(Time, Depth) %>%
+  ggplot(aes(salt, depth1, color = factor(Time))) +
+  geom_path() + 
+  scale_y_reverse()
+  
+```
+
+#### Profile 1  
+No success    
+```{r}
+library(mgcv)
+
+# Perform GAM and compute the predicted values from the GAM model
+df_times <- df_ctd %>%
+  count(Time) %>%
+  mutate(Time_lag = lag(Time),
+         Time_lead = lead(Time)) %>%
+  mutate(
+    Time_lag = 
+      case_when(
+        is.na(Time_lag) ~ Time - (Time_lead - Time),
+        TRUE ~ Time_lag
+      ),
+    Time_lead = 
+      case_when(
+        is.na(Time_lead) ~ Time + (Time - Time_lag),
+        TRUE ~ Time_lead
+      ),
+    Time_mid = Time_lag + (Time_lead - Time_lag)/2,
+    Time_diff = Time_lead - Time_lag
+  )
+df_times
+
+df <- df_ctd %>%
+  filter(is.finite(temp)) %>%
+  mutate(Depth_mid = (depth1 + depth2)/2) %>%
+  left_join(df_times %>% select(-n))
+
+# df %>% select(Time, Time_lag, Time_lead)
+
+ggplot(df, aes(x = as.numeric(Time_mid), y = depth_mid, fill = temp, 
+               height = depth1 - depth2, width = as.numeric(Time_diff))) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue4", mid = "green", high = "red2", midpoint = 10) +
+  scale_y_reverse()
+
+ggplot(df, aes(x = as.numeric(Time_mid), y = depth_mid, fill = temp, 
+               height = depth1 - depth2)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue4", mid = "green", high = "red2", midpoint = 10) +
+  scale_y_reverse()
+
+```
+
+
+#### Profile 2
+```{r, fig.width=9, fig.height=7}
+library(mgcv)
+
+# Perform GAM and compute the predicted values from the GAM model
+df <- df_ctd %>%
+  filter(is.finite(temp)) %>%
+  mutate(Depth_mid = (depth1 + depth2)/2,
+         Time_num = as.numeric(Time))
+model <- gam(temp ~ te(Time_num, Depth_mid, k = 20), data = df)
+
+df_smooth <- with(
+  df,
+  expand.grid(
+    Time_num = seq(min(Time_num), max(Time_num), length = 150),
+    Depth_mid = seq(min(Depth_mid), max(Depth_mid), length = 150)
+  ))
+df_smooth$Temp_gam <- predict.gam(model, df_smooth)
+df_smooth$Time <- as.POSIXct(df_smooth$Time, origin = "1970-01-01", tz = "GMT")
+
+#
+# Set df_smooth to NA where there is no data
+# df_smooth is NA if there are no data at that depth < 15 days away
+#
+
+# Max depth for data, 1 line per time (all times with data)
+data_maxdepth <- df %>% 
+  filter(is.finite(temp)) %>%
+  group_by(Time_num) %>%
+  summarise(Max_depth = max(depth1))
+nrow(data_maxdepth)
+
+# Times in the smoothed data
+times_smooth <- sort(unique(df_smooth$Time_num))
+
+# For times_smooth number i, return
+#  maximum depth for all data within 15 days  
+# global vars: df, times_smooth and data_maxdepth
+get_maxdepth <- function(i, max_timediff = 15){
+  df %>% 
+    filter(is.finite(temp)) %>%
+    count(Time_num) %>%
+    mutate(Timediff = abs(times_smooth[i] - Time_num)/(24*3600))%>%
+    select(-n) %>%
+    # just add column from data_maxdepth, doon't need join as times should be identical 
+    mutate(Max_depth = data_maxdepth$Max_depth) %>% 
+    filter(Timediff <= max_timediff) %>%
+    summarise(Max_depth = max(Max_depth)) %>%
+    pull(Max_depth)
+}
+# Test
+# get_maxdepth(2)
+
+# Make maximum depth for every time in smooth
+smooth_maxdepth <- data.frame(
+  Time_num = times_smooth,
+  Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth)
+)
+smooth_maxdepth
+
+# Add maximum depth to smoothed data, and filter data so we keep only 
+#   data < maximum depth
+df_smooth <- df_smooth %>%
+  left_join(smooth_maxdepth) %>%
+  filter(Depth_mid <= Max_depth)
+
+ggplot(df_smooth, aes(x = Time, y = Depth_mid)) +
+  geom_tile(aes(fill = Temp_gam)) +
+  # scale_fill_gradient2(low = "blue4", mid = "green", high = "red2", midpoint = 10) +
+  scale_fill_gradientn(colours = fields::tim.colors(16)) +
+  # viridis::scale_fill_viridis(option = "A") +
+  geom_contour(aes(z = Temp_gam), binwidth = 1, color = "white") +
+  # geom_point(data = df, aes(Time, Depth_mid), size = 0.1, color = "grey80") +
+  scale_y_reverse() +
+  theme_dark()
+
+
+
+```
+
+#### Profile 3   
+Using okokyst_plot  
+```{r, fig.width=9, fig.height=7}
+
+t1 <- Sys.time()
+
+okokyst_plot(data = df_ctd, varname = "temp", ctd_variable = TRUE)
+
+t2 <- Sys.time()
+t2-t1  # 15 sec
+
+```
+
+#### Profile 4   
+Using okokyst_plot, linear  
+```{r, fig.width=9, fig.height=7}
+
+t1 <- Sys.time()
+
+okokyst_plot(data = df_ctd, varname = "temp", ctd_variable = TRUE, linear = TRUE)
+
+t2 <- Sys.time()
+t2-t1   # 14.9 sec
+
+```
+
+#### Profile 5   
+Using okokyst_plot, gam  
+```{r, fig.width=9, fig.height=7}
+
+t1 <- Sys.time()
+
+okokyst_plot(data = df_ctd, varname = "temp", ctd_variable = TRUE, gam = TRUE, 
+             gam_k = 20, nx = 150, ny = 150)
+
+t2 <- Sys.time()
+t2-t1  # 22 sec
+
+# df_plot <- okokyst_make_plotdata(df, "salt")
+# head(df_plot, 2)
+
+```
+
+```{r}
+debugonce(okokyst_make_plotdata)
+df_plot <- okokyst_make_plotdata(df, "salt", gam = TRUE)
+head(df_plot, 2)
+
+```
+
+### Get Secchi data
+```{r}
+
+# Doesn't work
+# df <- okokyst_read_nc_safe("VT42_2011_2018.nc", "secci", ctd_variable = TRUE)
+
+X <- ncvar_get(ncin, "secchi")
+dim(X)
+
+df_secchi <- data.frame(
+  time,
+  secchi = X
+)
+                                
+```
+
+
+### Get water sample variables
+```{r}
+okokyst_read_nc_safe <- safely(okokyst_read_nc)
+df_sample_list <- vars_sample %>% map(~okokyst_read_nc_safe("VT42_2011_2018.nc", 
+                                                      ., 
+                                                      ctd_variable = FALSE)
+                                )
+
+names(df_sample_list) <- vars_sample
+  
+ok <- df_sample_list %>% map_lgl(~is.null(.[[2]]))
+ok_i <- which(ok)
+# all worked  
+
+# Start making df_sample
+df_sample <- df_sample_list[["TotP"]][[1]]  
+nrow(df_sample)
+
+# dput(vars_sample)
+vars_to_add <- c("PO4", "TotN", 
+  "NO3", "NH4", "SiO2", "TSM", "KlfA", "CFYT", "CFYT1", "CFYT2", 
+  "CFYT3", "FYT", "FYT1", "FYT2", "FYT3", "Sd")
+
+# Add variables to df_sample, one at a time
+for (var in vars_to_add){
+  df_sample <- df_sample %>%
+    full_join(df_sample_list[[var]][[1]][c("Depth","Time", var)], 
+              by = c("Depth","Time"))
+  cat(var, ":", nrow(df_sample), "\n")
+}
+# Add the rest
+for (var in c("ProjectId", "StationId")){
+  df_sample <- df_sample %>%
+    left_join(df_sample_list[[var]][[1]][c("Depth", var)], 
+              by = c("Depth"))
+  cat(var, ":", nrow(df_sample), "\n")
+}
+
+# Rearraange
+df_sample <- df_sample %>%
+  select(Filename, ProjectId, StationId, Long:Sd)
+df_sample %>% names()
+  
+# Data density
+names(df_sample) %>% map_df(~data.frame(., mean(is.finite(df_sample[[.]]))))
+
+```
+
+#### Check 1  
+Max depth  
+```{r}
+df_sample %>% 
+  filter(is.finite(NO3)) %>%
+  group_by(Time) %>%
+  summarise(Max_depth = max(Depth)) %>%
+  ggplot(aes(Time, Max_depth)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Max depth for nitrate")
+
+```
+
+
+#### Check 2  
+```{r}
+t1 <- df_sample %>% pull(Time) %>% unique()
+
+df_sample %>%
+  filter(Time %in% t1[1:16 + 30]) %>%
+  arrange(Time, Depth) %>%
+  mutate(Time = factor(Time)) %>%
+  ggplot(aes(NH4, Depth)) +
+  geom_path() + 
+  geom_point() + 
+  scale_y_reverse() +
+  facet_wrap("Time")
+
+# Mimnimum values per date (LOQ in some dates, probably)
+if (FALSE){
+  df_sample %>%
+    group_by(Time) %>%
+    summarise_all(min, na.rm = TRUE) %>%
+    View()
+}
+
+```
+
+## QC
+```{r}
+
+openxlsx::write.xlsx(
+  list(
+    CTD_data = df_ctd,
+    Secchi_data = df_secchi,
+    Sample_data = df_sample
+  ),
+  "Data/02_Data_VT42.xlsx"
+)
+
+```
+
+
+## Save   
+
+```{r}
+
+overwrite <- FALSE
+overwrite <- TRUE    # backup will be made, see below
+
+save_folder <- "Data"
+save_filename <- "02_Data_VT42.xlsx"
+save_fullpath <- paste0(save_folder, "/", save_filename)
+
+file_exists <- save_filename %in% dir(save_folder)
+
+if (file_exists & overwrite){
+  cat("File exists and 'overwrite' = TRUE. File will be overwritten.\n")
+  tempfile <- tempfile(pattern = "02_Data_", fileext = ".xlsx")
+  cat("A temporary copy of the file will be saved with this name:\n")
+  cat(tempfile, "\n")
+  backup_saved <- file.copy(save_fullpath, tempfile)
+} else if (file_exists & !overwrite) {
+  cat("File exists and will not be overwritten. Set 'overwrite' to TRUE to change.\n")
+  backup_saved <- FALSE
+} else {
+  backup_saved <- FALSE
+}
+
+  
+if (overwrite & !backup_saved){
+  cat("----------------------------------------------\nWas not able to save backup. File not overwritten.")
+} else if (!file_exists | (overwrite & backup_saved)){
+  openxlsx::write.xlsx(
+    list(
+      CTD_data = df_ctd,
+      Secchi_data = df_secchi,
+      Sample_data = df_sample
+    ),
+    save_fullpath
+  )
+  cat("----------------------------------------------\nFile saved.")
+} 
+
+# Delete backup files:
+if (FALSE){
+  fns <- dir(tempdir(), pattern = "02_Data_", full.names = TRUE)
+  file.remove(fns)
+}
+
+```
+
+
