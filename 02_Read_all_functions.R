@@ -150,28 +150,67 @@ okokyst_readall_nc <- function(fn, report = FALSE,
 #
 # Make ggplot-ready data (including interpolation)
 #
-okokyst_make_plotdata <- function(data, varname){
+# data:     Data on "long" format. Variables must be "Depth" and "Time"
+# varname:  Name of variable to plot (quoted string)
+# gam:      Uses mgcv:gam if gam = TRUE, otherwise uses akima. Default is gam = FALSE
+# gam_k:    The "k" (degrees of freedom + 1) for mgcv:gam. Ignored if gam = FALSE
+# linear:   TRUE/FALSE depending on whether you will use a linear akima interpolation or not. Ignored if gam = TRUE
+# nx:       Number of points in "time" direction you want in the filal smoothed data
+# ny:       Number of points in "depth" direction you want in the filal smoothed data
+
+okokyst_make_plotdata <- function(data, varname, 
+                                  gam = FALSE, gam_k = 20, linear = FALSE,
+                                  nx = 100, ny = 100){                     
   data <- as.data.frame(data)
   sel <- complete.cases(data[,c("Time", "Depth", varname)])
   data <- dplyr::rename(data, "z" = varname)
   # Interpolation
   data$Time2 <- as.numeric(data$Time)/86400    # convert to day-scale, for better interpolation
-  interpol <- with(data[sel,], akima::interp(Time2, Depth, z, nx = 100, ny = 100, linear = FALSE))   # spline
-  # Reshaping data
-  dimnames(interpol$z)[[2]] <- interpol$y
-  as.data.frame(interpol$z) %>%
-    data.frame(x = interpol$x, .) %>%
-    tidyr::gather(key = "y", value = "z", -x) %>%
-    mutate(Depth = as.numeric(sub("X", "", y)),
-           Time = as.POSIXct(x*86400, origin = "1970-01-01")) %>%
-    select(-y)
+  if (!gam){
+    interpol <- with(data[sel,], akima::interp(Time2, Depth, z, nx = nx, ny = ny, linear = FALSE))   # spline
+    # Reshaping data
+    dimnames(interpol$z)[[2]] <- interpol$y
+    result <- as.data.frame(interpol$z) %>%
+      data.frame(x = interpol$x, .) %>%
+      tidyr::gather(key = "y", value = "z", -x) %>%
+      mutate(Depth = as.numeric(sub("X", "", y)),
+             Time = as.POSIXct(x*86400, origin = "1970-01-01")) %>%
+      select(-y)
+  } else {
+    model <- gam(z ~ te(Time2, Depth, k = gam_k), data = data[sel,])
+    result <- with(
+      data[sel,],
+      expand.grid(
+        Time2 = seq(min(Time2), max(Time2), length = nx),
+        Depth = seq(min(Depth), max(Depth), length = ny)
+      ))
+    result$z <- predict.gam(model, result)
+    result$Time <- as.POSIXct(result$Time2*86400, origin = "1970-01-01", tz = "GMT")
+    # Make maximum depth for every time in smooth
+    times_smooth <- sort(unique(result$Time2))
+    smooth_maxdepth <- data.frame(
+      Time2 = times_smooth,
+      Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth, obsdata = data[sel,], smoothdata = result)
+    )
+    # Add maximum depth to smoothed data, and filter data so we keep only 
+    #   data < maximum depth
+    result <- result %>%
+      left_join(smooth_maxdepth, by = "Time2") %>%
+      filter(Depth <= Max_depth)
+  }
+  result
   }
 
-# df_plot <- okokyst_make_plotdata(df, "salt")
+# df_plot <- okokyst_make_plotdata(df_ctd, "salt")
+# df_plot <- okokyst_make_plotdata(df_ctd, "salt", gam = TRUE)
 
-okokyst_plot <- function(data, varname, ctd_variable, title = "", binwidth = 1, limits = c(NA,NA),
-                         color_ctdtime = "black"){
-  df_plot <- okokyst_make_plotdata(data, varname)
+okokyst_plot <- function(data, varname, ctd_variable, title = "", 
+                         binwidth = 1, limits = c(NA,NA), color_ctdtime = "black", 
+                         gam = FALSE, gam_k = 20, linear = FALSE,
+                         nx = 100, ny = 100){
+  df_plot <- okokyst_make_plotdata(data, varname, 
+                                   gam = gam, gam_k = gam_k, linear = linear,
+                                   nx = ny, ny = ny)
   gg <- ggplot(df_plot, aes(Time, Depth)) +
     geom_raster(aes(fill = z), interpolate = F, hjust = 0.5, vjust = 0.5) +
     geom_contour(aes(z = z), binwidth = binwidth) + 
@@ -199,3 +238,48 @@ okokyst_plot_points <- function(data, varname, ctd_variable, title = "", binwidt
   gg
 }
 
+
+# For times_smooth number i, return
+#  maximum depth for all data within 15 days  
+# Assume that variables z, Time2 and Depth exists in both data sets
+get_maxdepth <- function(i, max_timediff = 15, obsdata, smoothdata){
+  data_maxdepth <- obsdata %>% 
+    group_by(Time2) %>%
+    summarise(Max_depth = max(Depth))
+  times_smooth <- sort(unique(smoothdata$Time2))
+  obsdata %>% 
+    count(Time2) %>%
+    mutate(Timediff = abs(times_smooth[i] - Time2))%>%
+    select(-n) %>%
+    # just add column from data_maxdepth, doon't need join as times should be identical 
+    mutate(Max_depth = data_maxdepth$Max_depth) %>% 
+    filter(Timediff <= max_timediff) %>%
+    summarise(Max_depth = max(Max_depth)) %>%
+    pull(Max_depth)
+}
+
+# Ins
+# get_maxdepth(df_ctd, "temp")
+
+# sel <- complete.cases(data[,c("Time", "Depth", varname)])
+# data <- dplyr::rename(data, "z" = varname)
+# # Interpolation
+# data$Time2 <- as.numeric(data$Time)/86400    # convert to day-scale, for better interpolation
+
+okokyst_remove_nodata <- function(){
+  # Test
+  # get_maxdepth(2)
+  
+  # Make maximum depth for every time in smooth
+  smooth_maxdepth <- data.frame(
+    Time_num = times_smooth,
+    Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth)
+  )
+  smooth_maxdepth
+  
+  # Add maximum depth to smoothed data, and filter data so we keep only 
+  #   data < maximum depth
+  df_smooth <- df_smooth %>%
+    left_join(smooth_maxdepth) %>%
+    filter(Depth_mid <= Max_depth)
+}
