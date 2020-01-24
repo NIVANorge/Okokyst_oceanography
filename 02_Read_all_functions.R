@@ -158,6 +158,7 @@ okokyst_readall_nc <- function(fn, report = FALSE,
 # nx:       Number of points in "time" direction you want in the filal smoothed data
 # ny:       Number of points in "depth" direction you want in the filal smoothed data
 
+
 okokyst_make_plotdata <- function(data, varname, 
                                   gam = FALSE, gam_k = 20, linear = FALSE,
                                   nx = 100, ny = 100){                     
@@ -173,9 +174,21 @@ okokyst_make_plotdata <- function(data, varname,
     result <- as.data.frame(interpol$z) %>%
       data.frame(x = interpol$x, .) %>%
       tidyr::gather(key = "y", value = "z", -x) %>%
+      rename(Time2 = x) %>%
       mutate(Depth = as.numeric(sub("X", "", y)),
-             Time = as.POSIXct(x*86400, origin = "1970-01-01")) %>%
+             Time = as.POSIXct(Time2*86400, origin = "1970-01-01")) %>%
       select(-y)
+    # Make maximum depth for every time in smooth
+    times_smooth <- sort(unique(result$Time2))
+    smooth_maxdepth <- data.frame(
+      Time2 = times_smooth,
+      Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth, obsdata = data[sel,], smoothdata = result)
+    )
+    # Add maximum depth to smoothed data, and filter data so we keep only 
+    #   data < maximum depth
+    result <- result %>%
+      left_join(smooth_maxdepth, by = "Time2") %>%
+      filter(Depth <= Max_depth)
   } else {
     model <- gam(z ~ te(Time2, Depth, k = gam_k), data = data[sel,])
     result <- with(
@@ -199,7 +212,7 @@ okokyst_make_plotdata <- function(data, varname,
       filter(Depth <= Max_depth)
   }
   result
-  }
+}
 
 # df_plot <- okokyst_make_plotdata(df_ctd, "salt")
 # df_plot <- okokyst_make_plotdata(df_ctd, "salt", gam = TRUE)
@@ -207,7 +220,8 @@ okokyst_make_plotdata <- function(data, varname,
 okokyst_plot <- function(data, varname, ctd_variable, title = "", 
                          binwidth = 1, limits = c(NA,NA), color_ctdtime = "black", 
                          gam = FALSE, gam_k = 20, linear = FALSE,
-                         nx = 100, ny = 100){
+                         nx = 100, ny = 100,
+                         colored_points = FALSE, colored_points_size = 2){
   df_plot <- okokyst_make_plotdata(data, varname, 
                                    gam = gam, gam_k = gam_k, linear = linear,
                                    nx = ny, ny = ny)
@@ -218,8 +232,13 @@ okokyst_plot <- function(data, varname, ctd_variable, title = "",
     scale_fill_gradientn(varname, colours = fields::tim.colors(16), limits = limits)
   if (ctd_variable){
     gg <- gg + geom_vline(xintercept = unique(data$Time), color = color_ctdtime)
-  } else {
+  } else if (!colored_points) {
     gg <- gg + geom_point(data = data, aes(Time, Depth), color = "white", size = 0.5)
+  } else if (colored_points) {
+    gg <- gg + 
+      geom_point(data = data, aes(Time, Depth, color = .data[[varname]]), 
+                          size = colored_points_size) +
+      scale_color_gradientn(varname, colours = fields::tim.colors(16), limits = limits)
   }
   if (title != "")
     gg <- gg + ggtitle(title)

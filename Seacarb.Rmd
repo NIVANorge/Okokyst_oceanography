@@ -1,0 +1,345 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+## 0. Libraries
+```{r error = F, warning = F}
+library(tidyverse)
+library(readxl)
+library (seacarb)
+
+# pck for plotting
+library (lubridate)
+library(akima)
+library(ggplot2)
+
+```
+
+## 1. Folders and files    
+Content of folders (see code)  
+* R markdown must have working directory in same location as the script file is stored, ie. put data and script in same folder
+```{r}
+
+# sjekke filer i folder "Datasett"
+dir("Datasett")
+
+```
+
+## 2. read and clean file
+```{r}
+df <- read_excel("Datasett/OA_data_with_covars_ver04.xlsx")  
+
+#str (df)
+#summary(df)
+
+df <- rename(df,   Salt_CTD = Salinitet_psu,
+                   Temp_CTD = "Temperatur_grader Celsius")
+
+#remove NA in selected columns used in carb
+df <- drop_na(df, DIC, Alk, Salt_CTD, Temp_CTD)
+#str (df) # 92 obs
+
+
+# select only columns needed for carb function
+df_sel <- select (df, Depth, DIC, Alk, Salt_CTD, Temp_CTD)
+
+```
+
+## 3. Conversions
+### a. convert depth (m) to pressure (bar)
+```{r}
+
+df_sel$Pres <- d2p(depth = df_sel$Depth, lat=69) # NB dbar
+# NB! convert from dbar to bar
+df_sel$PresBar <- df_sel$Pres/10
+
+```
+
+### b. Convert DIC and Alk from umol/kg to mol/kg
+```{r}
+
+df_sel$DIC_mol <- df_sel$DIC*10^-6
+df_sel$Alk_mol <- df_sel$Alk*10^-6
+
+```
+
+
+### c. convert nutrients to mol/kg
+```{r}
+# need to do this later
+```
+
+
+## 4. Seacarb 
+# from OA-reports on choice of constants etc.
+#"To calculate all of the carbon parameters, the chemical model CO2SYS is used (Pierrot et al., 2006). The primary couple of parameters used are AT and CT alongside temperature, depth (pressure), salinity, phosphate and silica as input values for CO2SYS and the output includes in situ pH, pCO2, and saturation for calcite and aragonite. In these calculations, carbonic acid constants from Mehrbach et al. (1973), modified by Dickson and Millero (1987), were used. The pH is given in total scale (pHT) and the constant for HSO4- from Dickson (1990) and in situ temperature is used in the pH calculations. Calcium ion concentration ([Ca2+]) was assumed to be proportional to the salinity (Mucci, 1983), and corrected for pressure according to Ingle (1975). NIVA measures pH directly in addition to using calculated pH derived from AT and CT in the CO2SYS program"
+#email from Melissa/Ingunn 15 Jan 2020: use Uppstrom (1974) for [B]T
+```{r}
+
+# Documentation for function from: https://cran.r-project.org/web/packages/seacarb/seacarb.pdf
+
+# add data flag 15, ALK and DIC given, set nutrients to 0 for now.
+df_carb <- add_column(df_sel, flag = 15, Pt = 0, Sit = 0)
+str (df_carb)
+
+# default
+#carb(flag, var1, var2, S=35, T=25, Patm=1, P=0, Pt=0, Sit=0,
+#k1k2="x", kf="x", ks="d", pHscale="T", b="u74", gas="potential",
+#warn="y", eos="eos80", long=1.e20, lat=1.e20)
+
+# carb function to calculate parameters of the seawater carbonate system
+df_calc <- carb(flag=df_carb$flag, var1=df_carb$Alk_mol, var2=df_carb$DIC_mol, S=df_carb$Salt_CTD, T=df_carb$Temp_CTD,
+P=df_carb$PresBar, Sit=df_carb$Sit, Pt=df_carb$Pt, k1k2="m06", kf="dg", ks="d")
+
+# plot ()
+
+
+```
+## 4. Merge calculated carbonate parameters with original dataset
+```{r}
+
+df_all <- bind_cols (df, df_calc)
+str(df_all)
+
+df_plot <- select (df_all, Station, Date, Depth, DIC, Alk, Salt_CTD, Temp_CTD, pH, fCO2, OmegaAragonite)
+
+```
+
+## 5. Save dataset
+```{r}
+
+```
+
+```{r}
+#
+# Make ggplot-ready data (including interpolation)
+#
+# data:     Data on "long" format. Variables must be "Depth" and "Time"
+# varname:  Name of variable to plot (quoted string)
+# gam:      Uses mgcv:gam if gam = TRUE, otherwise uses akima. Default is gam = FALSE
+# gam_k:    The "k" (degrees of freedom + 1) for mgcv:gam. Ignored if gam = FALSE
+# linear:   TRUE/FALSE depending on whether you will use a linear akima interpolation or not. Ignored if gam = TRUE
+# nx:       Number of points in "time" direction you want in the filal smoothed data
+# ny:       Number of points in "depth" direction you want in the filal smoothed data
+
+okokyst_make_plotdata <- function(data, varname, 
+                                  gam = FALSE, gam_k = 20, linear = FALSE,
+                                  nx = 100, ny = 100){                     
+  data <- as.data.frame(data)
+  sel <- complete.cases(data[,c("Time", "Depth", varname)])
+  data <- dplyr::rename(data, "z" = varname)
+  # Interpolation
+  data$Time2 <- as.numeric(data$Time)/86400    # convert to day-scale, for better interpolation
+  if (!gam){
+    interpol <- with(data[sel,], akima::interp(Time2, Depth, z, nx = nx, ny = ny, linear = FALSE))   # spline
+    # Reshaping data
+    dimnames(interpol$z)[[2]] <- interpol$y
+    result <- as.data.frame(interpol$z) %>%
+      data.frame(x = interpol$x, .) %>%
+      tidyr::gather(key = "y", value = "z", -x) %>%
+      rename(Time2 = x) %>%
+      mutate(Depth = as.numeric(sub("X", "", y)),
+             Time = as.POSIXct(Time2*86400, origin = "1970-01-01")) %>%
+      select(-y)
+    # Make maximum depth for every time in smooth
+    times_smooth <- sort(unique(result$Time2))
+    smooth_maxdepth <- data.frame(
+      Time2 = times_smooth,
+      Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth, obsdata = data[sel,], smoothdata = result)
+    )
+    # Add maximum depth to smoothed data, and filter data so we keep only 
+    #   data < maximum depth
+    result <- result %>%
+      left_join(smooth_maxdepth, by = "Time2") %>%
+      filter(Depth <= Max_depth)
+  } else {
+    model <- gam(z ~ te(Time2, Depth, k = gam_k), data = data[sel,])
+    result <- with(
+      data[sel,],
+      expand.grid(
+        Time2 = seq(min(Time2), max(Time2), length = nx),
+        Depth = seq(min(Depth), max(Depth), length = ny)
+      ))
+    result$z <- predict.gam(model, result)
+    result$Time <- as.POSIXct(result$Time2*86400, origin = "1970-01-01", tz = "GMT")
+    # Make maximum depth for every time in smooth
+    times_smooth <- sort(unique(result$Time2))
+    smooth_maxdepth <- data.frame(
+      Time2 = times_smooth,
+      Max_depth = seq_along(times_smooth) %>% map_dbl(get_maxdepth, obsdata = data[sel,], smoothdata = result)
+    )
+    # Add maximum depth to smoothed data, and filter data so we keep only 
+    #   data < maximum depth
+    result <- result %>%
+      left_join(smooth_maxdepth, by = "Time2") %>%
+      filter(Depth <= Max_depth)
+  }
+  result
+  }
+
+# df_plot <- okokyst_make_plotdata(df_ctd, "salt")
+# df_plot <- okokyst_make_plotdata(df_ctd, "salt", gam = TRUE)
+
+okokyst_plot <- function(data, varname, ctd_variable, title = "", 
+                         binwidth = 1, limits = c(NA,NA), color_ctdtime = "black", 
+                         gam = FALSE, gam_k = 20, linear = FALSE,
+                         nx = 100, ny = 100,
+                         colored_points = FALSE, colored_points_size = 2){
+  df_plot <- okokyst_make_plotdata(data, varname, 
+                                   gam = gam, gam_k = gam_k, linear = linear,
+                                   nx = ny, ny = ny)
+  gg <- ggplot(df_plot, aes(Time, Depth)) +
+    geom_raster(aes(fill = z), interpolate = F, hjust = 0.5, vjust = 0.5) +
+    geom_contour(aes(z = z), binwidth = binwidth) + 
+    scale_y_reverse() +
+    scale_fill_gradientn(varname, colours = fields::tim.colors(16), limits = limits)
+  if (ctd_variable){
+    gg <- gg + geom_vline(xintercept = unique(data$Time), color = color_ctdtime)
+  } else if (!colored_points) {
+    gg <- gg + geom_point(data = data, aes(Time, Depth), color = "white", size = 0.5)
+  } else if (colored_points) {
+    gg <- gg + 
+      geom_point(data = data, aes(Time, Depth, fill = .data[[varname]]), 
+                 pch = 21, size = colored_points_size) +
+      scale_color_gradientn(varname, colours = fields::tim.colors(16), limits = limits)
+  }
+  if (title != "")
+    gg <- gg + ggtitle(title)
+  gg
+}
+
+
+# For times_smooth number i, return
+#  maximum depth for all data within 15 days  
+# Assume that variables z, Time2 and Depth exists in both data sets
+get_maxdepth <- function(i, max_timediff = 15, obsdata, smoothdata){
+  data_maxdepth <- obsdata %>% 
+    group_by(Time2) %>%
+    summarise(Max_depth = max(Depth))
+  times_smooth <- sort(unique(smoothdata$Time2))
+  obsdata %>% 
+    count(Time2) %>%
+    mutate(Timediff = abs(times_smooth[i] - Time2))%>%
+    select(-n) %>%
+    # just add column from data_maxdepth, doon't need join as times should be identical 
+    mutate(Max_depth = data_maxdepth$Max_depth) %>% 
+    filter(Timediff <= max_timediff) %>%
+    summarise(Max_depth = max(Max_depth)) %>%
+    pull(Max_depth)
+}
+
+```
+
+
+## 6. Plotting pH
+### a. Creating Matlab jet colormap
+```{r}
+# define a color palette similar to Matlabs jet colormap
+jet.colors <- colorRampPalette(c("#00007F", "blue", "#007FFF", "cyan", "#7FFF7F", "yellow", "#FF7F00", "red", "#7F0000"))
+
+# from Andrew:
+# function J = jetak(m)
+# %JET    Variant of HSV
+# %   JET(M) returns an M-by-3 matrix containing the jet colormap, a variant
+# %   of HSV(M). The colors begin with dark blue, range through shades of
+# %   blue, cyan, green, yellow and red, and end with dark red. JET, by
+# %   itself, is the same length as the current figure's colormap. If no
+# %   figure exists, MATLAB uses the length of the default colormap.
+
+library(mgcv)
+
+df_plot2 <- df_plot %>%
+  rename(Time = Date)
+
+# 1
+gg <- okokyst_plot(data = df_plot2, varname = "pH", ctd_variable = FALSE)
+gg
+
+# 2 med punkter
+gg <- okokyst_plot(data = df_plot2, varname = "pH", ctd_variable = FALSE,
+                   colored_points = TRUE, limits = c(7.65, 8.25))
+gg
+
+# 3 Gam             
+gg <- okokyst_plot(data = df_plot2, varname = "pH", ctd_variable = FALSE, gam = TRUE, gam_k = 7)
+gg
+
+# 4 GAM med snudd fargeskala
+gg + 
+  scale_fill_gradientn(colours = rev(jet.colors(16)))
+
+# 5 GAM med punkter
+# range(df_plot2$pH)
+gg <- okokyst_plot(data = df_plot2, varname = "pH", ctd_variable = FALSE, gam = TRUE, gam_k = 9, 
+             colored_points = TRUE, limits = c(7.65, 8.25))
+gg
+
+```
+
+```{r}
+
+```
+
+### b. contourplot
+```{r}
+# DAG:
+#trenger å plotte kontourplot med dyp mot tid for pH og omega aragonit
+# først og fremst for VR54, men også for SVR1 men vet ikke om det er så mye vits når det bare er to datoer...
+
+
+#test %>%
+#  gather("Variable", "Value", O2_mg, O2_ml, conv_O2_ml) %>%
+#  ggplot(aes(Date, Value)) +
+#    geom_line() +
+#    facet_grid(StationId~Variable)
+
+
+VR54 <- df_plot %>%
+  filter(Station == "VR54")
+
+range (df_plot$pH)
+
+str(VR54)
+
+###############VT3
+# make dataset for interpolation and plotting
+df_raw <- VR54  %>%
+  select (Date, Depth, pH) %>%
+  rename (Variable = pH)
+
+#interpolate
+all.dates <- seq(from = min(df_raw$Date), to = max(df_raw$Date), by = "day")
+all.depths <- -seq(0, 150, 1)
+interpol <- with(df_raw,
+                 interp(x = Date, y = Depth, z = Variable, 
+                        xo = all.dates, yo = all.depths)
+)
+
+# restore dataframe for ggplot
+df <- as.data.frame(interpol$z)
+colnames(df) <- interpol$y
+df$Date <- interpol$x
+df_pred <- df %>%
+  tidyr::gather("Depth", "Var_int", -Date)
+
+# Restore our variables to proper format....
+df_pred$Depth <- as.numeric(df_pred$Depth)
+df_pred$Date <- as.Date(df_pred$Date, origin = "1970-01-01")
+
+# code from above, except that "Var_gam2" is replaced by "Var_int"
+pH_VR54 <- ggplot(df_pred, aes(x = Date, y = Depth)) + 
+  geom_raster(aes(fill = Var_int), alpha = 0.5) +            # interpolation
+    scale_fill_gradientn(colours = jet.colors(20), limits = c(0.7, 3.4)) + 
+  geom_point(data = df_raw, aes(colour = Variable), shape = "-", size = rel(6)) +  # raw
+    scale_colour_gradientn(colours = jet.colors(20), limits = c(0.7, 3.4), guide = 'none') +
+  geom_contour(data = df_pred, aes(z = Var_int), color = "white", alpha = 0.5) +
+      labs(title = "", x = "", y = "", fill = "") +
+      scale_x_date(date_breaks = "2 month", date_labels =  "%b %y", limits = c(min, max)) +
+       theme(axis.text.x=element_blank(),axis.title.x=element_blank(), axis.ticks.length=unit(.25, "cm"),
+                plot.title = element_text(hjust = 0.5), plot.margin = unit(c(0,1,0,1), "lines"))
+
+plot(DOC_VT3)
+
+```
+
