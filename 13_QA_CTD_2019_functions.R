@@ -90,10 +90,10 @@ files_lacking_var <- function(variablename, fileinformation = fileinfo){
 # Read the data in row number 'file_number' of 'df_fileinfo'
 #
 # Global variable: basefolder
-read_data_fileno <- function(file_number, df_fileinfo){
+read_data_fileno <- function(file_number, df_fileinfo, ...){
   i <- file_number
   fn <- with(df_fileinfo[i,], paste0(basefolder, Folder, "/", File))
-  read_excel_droplines(fn, sheet = df_fileinfo$Sheet[i])
+  read_excel_droplines(fn, sheet = df_fileinfo$Sheet[i], ...)
   }
 
 #
@@ -173,14 +173,14 @@ get_stations <- function(file_number, df_fileinfo = fileinfo,
 #
 read_excel_droplines <- function(fn, sheetname, first_data_row = 3){
   # Read top line, only for the column names
-  df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 0)
+  df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = first_data_row)
   # Read data. All data is read as text (strings) and later converted, due to the "<" signs
   data <- read_excel(fn, sheet = sheetname, col_names = FALSE, skip = first_data_row-1)
   # Set column names (copy them from df_names)
   if (ncol(df_names) == ncol(data)){
     names(data) <- names(df_names)
   } else {
-    stop("First line doensn't have the same number of columns as the rest of the file!")
+    stop("First line doesn't have the same number of columns as the rest of the file!")
   }
   data
 }
@@ -196,6 +196,8 @@ read_excel_droplines <- function(fn, sheetname, first_data_row = 3){
 #
 # Plot cast (i.e. Depth along each profile)
 #
+# Note hard-coded columns 'Temperatur' and 'Saltholdighet'
+#
 plot_cast_station <- function(stationcode, data, titletext = ""){
   if ("StationCode" %in% names(data)){
     df <- data %>%
@@ -205,6 +207,7 @@ plot_cast_station <- function(stationcode, data, titletext = ""){
       filter(StationId %in% stationcode)
   }
   df <- df %>%
+    filter(!is.na(Temperatur) | !is.na(Saltholdighet)) %>%       
     group_by(Date) %>%
     mutate(Observation_no = seq_len(n())) %>%
     ungroup()
@@ -240,7 +243,8 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
     file_no <- df_fileinfo_stations$File_no[i]
     plot_cast_station(df_fileinfo_stations$StationCode[i], 
                       dat, 
-                      titletext = paste0("Plot ", i, ", File ", file_no)
+                      titletext = paste0("Plot ", i, ", File ", file_no, " ", 
+                                         sQuote(df_fileinfo_stations$File[i]))
     )
   }
 }
@@ -252,7 +256,7 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
 #
 # Handles the use of both 'StationCode' and 'StationId'  
 #
-plot_ctdprofile_station <- function(stationcode, data, variable, titletext = ""){
+plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", limits = NULL){
   if ("StationCode" %in% names(data)){
     df <- data %>%
       filter(StationCode %in% stationcode)
@@ -269,8 +273,12 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "")
     labs(title = 
            paste(titletext, stationcode, " - ", variable)
     )
+  if (!is.null(limits)){
+    gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
+  }
   print(gg)
 }
+
 # Example
 # fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor/?kokyst_Norskehavet_S?r1_CTD_2017.xlsm"
 # dat <- read_excel_droplines(fn, "data")
@@ -281,14 +289,16 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "")
 # Plot all profiles, function      
 # Note the default 'fileinfo_stations'
 #
-plot_ctdprofile_all <- function(variable, df_fileinfo_stations = fileinfo_stations){
+plot_ctdprofile_all <- function(variable, df_fileinfo_stations = fileinfo_stations, limits = NULL){
   for (i in seq_len(nrow(df_fileinfo_stations))){
     dat <- get_data_filestation(i)
     file_no <- df_fileinfo_stations$File_no[i]
     plot_ctdprofile_station(df_fileinfo_stations$StationCode[i], 
                             dat, 
                             variable, 
-                            titletext = paste0("Plot ", i, ", File ", file_no, " -")
+                            titletext = paste0("Plot ", i, ", File ", file_no, " ",
+                                               sQuote(df_fileinfo_stations$File[i]), " -"),
+                            limits = limits
     )
   }
 }
@@ -312,6 +322,7 @@ plot_timeseries_station <- function(stationcode, data, variable, titletext = "")
   }
 
   df <- df %>%
+    filter(!is.na(.data[[variable]])) %>%
     mutate(Depth = case_when(
       Depth1 == 0 ~ 0,
       Depth1 > 0 ~ round((Depth1+Depth2)/2, 0) 
@@ -322,8 +333,22 @@ plot_timeseries_station <- function(stationcode, data, variable, titletext = "")
   #    pal <- colorspace::choose_palette()
   #    In menu: Sequential (multiple hues)
   #    h = c(131, -96), c. = c(80, 48), l = c(59, 30), power = c(0.967, 1.244)
-  depths <- c(0, 1, 5, 10, 20, 50, 100, 200, max(df$Depth)-10)
-  colors <- c("#18A439", "#6D8F00", "#8B7800", "#9A6100", "#9E4B3F", "#983861", "#882F77", "#6B3480", "#3C417E")
+  # 10 colors (if we include minimum max-depth)
+  colors <- c("#18A439", "#689100", "#867D00", "#966900", "#9D5529", "#9D4250", 
+              "#94336A", "#832F7A", "#673581", "#3C417E")
+  maxdepth_by_date <- df %>%
+    group_by(Date) %>%
+    summarise(Max_depth = max(Depth, na.rm = TRUE)) %>%
+    pull(Max_depth)
+  depths <- c(0, 1, 5, 10, 20, 50, 100, 200)
+  # If minimum max-depth is >10% lower than median max-depth ,we plot it
+  if (min(maxdepth_by_date) < 0.9*median(maxdepth_by_date)){   
+    depths <- c(depths, min(maxdepth_by_date))
+  } else {
+    colors <- colors[-9]
+  }
+  # Add median maximum depth minus 10 meters
+  depths <- c(depths, round(median(maxdepth_by_date),0) - 10)
   names(colors) <- depths
 
   gg <- df %>%
@@ -351,7 +376,8 @@ plot_timeseries_all <- function(variable, df_fileinfo_stations = fileinfo_statio
     plot_timeseries_station(df_fileinfo_stations$StationCode[i], 
                             dat, 
                             variable, 
-                            titletext = paste0("Plot ", i, ", File ", file_no, " -")
+                            titletext = paste0("Plot ", i, ", File ", file_no, " ",
+                                               sQuote(df_fileinfo_stations$File[i]), " -")
     )
   }
 }
