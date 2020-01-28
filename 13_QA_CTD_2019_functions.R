@@ -256,33 +256,91 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
 #
 # Handles the use of both 'StationCode' and 'StationId'  
 #
-plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", limits = NULL){
+plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", 
+                                    limits = NULL, points = FALSE){
   if ("StationCode" %in% names(data)){
     df <- data %>%
-      filter(StationCode %in% stationcode)
+      filter(StationCode %in% stationcode & !is.na(.data[[variable]]))
   } else {
     df <- data %>%
-      filter(StationId %in% stationcode)
+      filter(StationId %in% stationcode & !is.na(.data[[variable]]))
   }
-  gg <- df %>%
-    mutate(Date = factor(Date)) %>%
-    ggplot(aes(.data[[variable]], Depth1)) +
-    geom_path() +
-    scale_y_reverse() + 
-    facet_wrap("Date") +
-    labs(title = 
-           paste(titletext, stationcode, " - ", variable)
-    )
-  if (!is.null(limits)){
-    gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
+  df <- df %>%
+    group_by(Date) %>%
+    mutate(n = n()) %>%
+    filter(n > 1) %>%
+    ungroup()
+  if (nrow(df) > 0){
+    gg <- df %>%
+      mutate(Date = factor(Date)) %>%
+      ggplot(aes(.data[[variable]], Depth1)) +
+      geom_path() +
+      scale_y_reverse() + 
+      facet_wrap("Date") +
+      labs(title = paste(titletext, stationcode, " - ", variable),
+           x = variable)
+    if (points){
+      gg <- gg + geom_point()
+    }
+    if (!is.null(limits)){
+      gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
+    }
+    print(gg)
   }
-  print(gg)
 }
 
 # Example
 # fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor/?kokyst_Norskehavet_S?r1_CTD_2017.xlsm"
 # dat <- read_excel_droplines(fn, "data")
 # plot_ctdprofile_station("VR51", dat, "Saltholdighet")
+
+#
+# Plot profiles for several parameters
+#
+# Otherwise simular to 'plot_ctdprofile_station'
+#
+# titletext1 is added at start of title
+# titletext2 is added at end of title
+plot_ctdprofile_station_multi <- function(stationcode, data, variables, 
+                                          titletext1 = "", titletext2 = "",
+                                          limits = NULL, points = FALSE){
+  if (!"StationCode" %in% names(data)){
+    df <- data %>% rename(StationId = StationCode)
+  } else {
+    df <- data
+  }
+  df <- df[c("StationCode", "Date", "Depth1", variables)] %>%
+    filter(StationCode %in% stationcode) %>%
+    pivot_longer(-c(StationCode, Date, Depth1), 
+                 names_to = "Variable",
+                 values_to = "Value") %>%
+    filter(!is.na(Value)) %>%
+    # For getting ride of profiles with only one depth
+    group_by(Variable, Date) %>%
+    mutate(n = n()) %>%
+    filter(n > 1) %>%
+    ungroup()
+  if (nrow(df) > 0){
+    gg <- df %>%
+      mutate(Date = factor(Date)) %>%
+      ggplot(aes(Value, Depth1, color = Variable)) +
+      geom_path() +
+      scale_y_reverse() + 
+      facet_wrap("Date") +
+      labs(title = paste(titletext1, stationcode, " - ", titletext2))
+    if (points){
+      gg <- gg + geom_point()
+    }
+    if (!is.null(limits)){
+      gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
+    }
+    print(gg)
+  }
+}
+# Examples:
+# plot_ctdprofile_station_multi("VT16", data = dat, 
+#                               variables = c("PO4-P", "TOTP"), 
+#                               points = TRUE, titletext2 = "Phosporus")
 
 
 #
