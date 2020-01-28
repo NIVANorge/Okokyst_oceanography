@@ -1,0 +1,203 @@
+---
+title: "12_QA_2019_from_excel"
+author: "DHJ"
+date: "13 1 2020"
+output: 
+  html_document:
+    keep_md: true
+    toc: true
+    toc_float: true
+---
+
+# QA for Nordsjøen Nord, nutrients, ØKOKYST 2019 report (January 2020)    
+
+
+  
+## 1. Libraries
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+# library(niRvana)
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")
+
+# RColorBrewer::display.brewer.all()
+```
+
+
+## 2. Read file    
+```{r, echo = FALSE, results = 'hide'}
+
+fn <- "Datasett/Nordsjø Nord/QC_hydrokjemi_NordsjøenNord_2017_2019.xlsx"
+readxl::excel_sheets(fn)
+dat <- read_excel_droplines(fn, sheet = "Sheet1")
+
+# Fix the first column names
+dat_row2 <- read_excel(fn, sheet = "Sheet1", skip = 1, n_max = 1)
+names(dat)[1:8] <- names(dat_row2)[1:8]
+
+# Fixing 1 
+dat <- dat %>%
+  rename(Saltholdighet = Salinitet)  %>%   # for plot_ctdprofile_station to work
+  mutate(Date = dmy_hms(SampleDate))
+
+# Fixing 2 - change variablse to numeric  
+vars <- names(dat %>% select(KlfA:TSM))
+for (var in vars)
+  dat[[var]] <- as.numeric(dat[[var]])
+
+```
+
+### Tables of stations    
+```{r, echo = FALSE}
+dat %>%
+  count(StationCode)
+
+# dat %>%
+#   count(SampleDate)
+# 
+# dat %>%
+#   count(StationCode, Date)
+
+stations <- dat %>%
+  count(StationCode) %>%
+  pull(StationCode)
+
+```
+
+
+```{r variables, echo = FALSE, results = 'hide'}
+vars
+```
+
+
+## 3. KlfA
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+# debugonce(plot_ctdprofile_station)
+# plot_ctdprofile_station("VT16", data = dat, variable = "KlfA", points = TRUE)
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "KlfA", points = TRUE)
+
+```
+
+
+## 4. SiO2  
+- Some really high values (ca 3 or more) in   
+    + VT52 (Jan 2018 and Aug 2018)  
+    + VT53 (Jan 2018)  
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "SiO2", points = TRUE)
+
+```
+
+
+## 5. Nitrogen    
+  
+### Nitrite + nitrate, ammonium, Tot-N  
+- TOTN is too low (>20%, see next section) in  
+    + VT52, July 2018, 20 m  
+    + VT74, Aug 2018, 30 m  
+    + VT75, Dec 2017, 10 m  
+- TOTN seems too low (deviates from pattern in inorganic components) in   
+    + VT52, Aug 2018, 0, 5 and 10 m
+    + VT53, Jan 2018, 5 m
+    + VT53, July 2018, 5 + 10 m
+    + VT70, July 2018?
+    + VT70, Dec 2018, 5 m
+    + VT74, May 2018, 0 m
+    + VT75, Dec 2017, 10 m
+- TOTN seems too high in   
+    + VT75, Oct 2018, 10 m
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+dat <- dat %>%
+  mutate(Inorg_N_sum = `NH4-N` + `NO3+NO2-N`)
+
+stations %>% walk(plot_ctdprofile_station_multi, 
+                  data = dat, variables = c("NH4-N", "NO3+NO2-N", "Inorg_N_sum", "TOTN"), 
+                  points = TRUE, titletext2 = "Nitrogen")
+
+```
+
+
+### Inorg. N as fraction of TOTN  
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+dat <- dat %>%
+  mutate(Inorg_N_fraction = Inorg_N_sum/TOTN)
+
+dat %>%
+  filter(Inorg_N_fraction > 1) %>%
+  group_by(StationCode, Date) %>%
+  summarize(N = n(), 
+            Inorg_N_fraction_max = max(Inorg_N_fraction),
+            Inorg_N_fraction_mean = mean(Inorg_N_fraction)
+            )
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Inorg_N_fraction", points = TRUE,
+                  limits = 1)
+
+
+```
+
+## 6. Phosphorus
+
+### PO4-P and TOTP   
+- TOTP is suspiciously high:  
+    + VT70, Sept 2017, 20 m
+    + VT70, Aug 2019, 5 m
+- TOTP is a little too low (5-13%, see next section):
+    + VT16, March and May 2017  
+- PO4 is suspiciously low:  
+    + VT74, April 2017, 30 m  
+    
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+# debugonce(plot_ctdprofile_station_multi)
+# plot_ctdprofile_station_multi("VT16", data = dat, variables = c("PO4-P", "TOTP"), 
+#                               points = TRUE, titletext2 = "Phosporus")
+
+stations %>% walk(plot_ctdprofile_station_multi, 
+                  data = dat, variables = c("PO4-P", "TOTP"), 
+                  points = TRUE, titletext2 = "Phosporus")
+
+```
+
+
+
+
+### Inorg. P as fraction of TOTP
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+dat <- dat %>%
+  mutate(Inorg_P_fraction = `PO4-P`/TOTP)
+
+dat %>%
+  filter(Inorg_P_fraction > 1) %>%
+  group_by(StationCode, Date) %>%
+  summarize(N = n(), 
+            Inorg_P_fraction_max = max(Inorg_P_fraction),
+            Inorg_P_fraction_mean = mean(Inorg_P_fraction)
+            )
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Inorg_P_fraction", points = TRUE,
+                  limits = 1)
+
+
+```
+
+
+
+
+
+
