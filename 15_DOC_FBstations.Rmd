@@ -1,0 +1,715 @@
+---
+title: "ØKOKYST Ferrybox"
+author: "Helene"
+date: "7 februar 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+## 1. Libraries
+```{r}
+
+library(plyr)      # used by functions in "Get_files_NIVA_ftp_server_functions.R" 
+library(dplyr)     # load AFTER plyr
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+source("Get_files_NIVA_ftp_server_functions.R")
+
+# library(niRvana)
+#source("12_QA_2019_from_excel_functions.R")
+# RColorBrewer::display.brewer.all()
+```
+
+## 2.Aquamonitor functions
+-code from Dag to read and reformat Aquamonitor data (email 07.02.2020). NB! columns must start with stationId and and with Depth2
+```{r}
+# READING "WIDE" AQUAMONITOR DATA ----
+#
+
+AqMexport_read_waterchemistry <- function(filename, reformat_long = TRUE, remove_duplicates = TRUE, sheetname = "WaterChemistry"){
+  # Read top line, only for the column names
+  df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 0)
+  # Read data. All data is read as text (strings) and later converted, due to the "<" signs
+  df_chem <- read_excel(fn, sheet = "WaterChemistry", col_names = FALSE, skip = 2, col_types = "text")
+  # Set column names (copy them from df_names)
+  if (ncol(df_names) == ncol(df_chem)){
+    names(df_chem) <- names(df_names)
+  } else {
+    cat("Not same number of columns!\n")
+  }
+  # Convert these variables to numeric
+  for (col in c("ProjectId", "SampleDate", "Time", "Depth1", "Depth2")){
+    df_chem[[col]] <- as.numeric(df_chem[[col]])
+  }
+  # UNIX time
+  # We just overwrite Time with UNIX time, which is usually just 00:00 anyway
+  df_chem$Time <- as.POSIXct((df_chem$SampleDate - 25569)*24*3600, origin = "1970-01-01", tz = "GMT")
+  
+  # Reformat data to long/narrow format (default option)
+  if (reformat_long)
+    df_chem <- AqMexport_reformat_long(df_chem, remove_duplicates = remove_duplicates)
+  
+  df_chem 
+  }
+
+# Note hard-coded columns "ProjectId:Depth2"
+AqMexport_reformat_long <- function(dat, remove_duplicates = TRUE){
+  dat_long <- dat %>%
+    pivot_longer(cols = -c(ProjectId:Depth2), names_to = "Variable", values_to = "Value_chr") 
+  # Get numeric data values
+  x <- sub(",", ".", dat_long$Value_chr, fixed = TRUE)
+  x <- sub(",", ".", x, fixed = TRUE)
+  dat_long$Value <- as.numeric(sub("<", "", x))
+  # Make less-than flag
+  dat_long$Flag <- ifelse(grepl("<", dat_long$Value_chr, fixed = TRUE), "<", NA)
+  # Get rid of duplicates (several observations, as there are several projects and each value isrepeated for each project)
+  if (remove_duplicates)
+    dat_long <- AqMexport_remove_duplicates(dat_long)
+  dat_long
+}
+  
+AqMexport_remove_duplicates <- function(dat){
+  dat %>%
+    filter(!is.na(Value)) %>%
+    group_by(StationId, StationCode, StationName, Time, Depth1, Depth2, Variable) %>%
+    summarise(ProjectId = paste(ProjectId, collapse = ","),
+              ProjectName = paste(ProjectName, collapse = "; "),
+              Value = first(Value), 
+              Flag = first(Flag)) %>%
+    ungroup()
+}
+
+```
+
+### test using Aqm read functions
+*NB fikk kke til å fungere
+```{r}
+
+# dat_broad <- AqMexport_read_waterchemistry("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox.xlsx", reformat_long = FALSE)   # 30 seconds
+# dat1 <- AqMexport_reformat_long(dat_broad, remove_duplicates = FALSE)
+# dat2 <- AqMexport_remove_duplicates(dat1)
+
+```
+
+
+## 2. Read file
+```{r}
+
+# DOC	  Fluo	  KlfA	NH4-N	NO3 	PO4-P	  Salt	SiO2	Temperatur	TOC	TOTN	TOTP	TSM	Turbiditet
+# mg/L C	µg/l	µg/l	µg/l	µg/l	µg/l		      mg/l	C	          mg/l µg/l	µg/l	mg/l	FNU
+
+# sjekke filer i folder "Datasett"
+#dir("Datasett")
+
+df_aqm <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", sheet = "WaterChemistry")
+
+#lage datoobjekt
+df_aqm$Date <- as.Date (paste (df_aqm$Year, df_aqm$Month, df_aqm$Day, sep ="-"))
+
+str(df_aqm)
+summary(df_aqm)
+
+
+# no duplicates
+str (test <- distinct (df_aqm))
+
+#include only 2018 and 2019 data
+df_aqm <- subset(df_aqm, Date >= "2018-01-01" &  Date <= "2019-12-31")
+
+# StationCode seems to be correct for all rows
+#levels(as.factor (df_aqm$StationName))
+#levels(as.factor (df_aqm$StationCode))
+df_aqm$StationCode <- as.factor (df_aqm$StationCode)
+df_aqm$StationName <- as.factor (df_aqm$StationName)
+levels(df_aqm$StationCode)
+
+#order stations from south to north
+df_aqm$StationCode <- factor(df_aqm$StationCode, levels = c("VT4", "VT12", "VT72", "VT80", "VT45", "VT22", "VT23", "VT76", "VR23", "VR25"))
+
+# convert some columns read as chr to numeric
+df_aqm<- df_aqm %>% mutate(
+    KlfA = as.numeric(KlfA), NH4 = as.numeric(NH4), NO3_NO2 = as.numeric(NO3_NO2),  PO4 = as.numeric(PO4) 
+)
+
+# rounding
+# df_aqm <- df_aqm %>% 
+#   mutate_if(is.numeric, round, digits = 2)
+
+# look at missing values
+tb <- df_aqm %>% 
+  gather("Variable", Value, DOC:TOTP) %>%
+  filter(!is.na(Value)) %>%
+  xtabs(~StationCode + Variable, .)
+tb
+
+```
+
+### Converting DOC from mg C /l (NIVAlab) to umol C /Kg
+```{r}
+# https://ocean.ices.dk/Tools/UnitConversion.aspx
+#Conversions
+#??g/l = ??mol/l × MW
+#g/l ??? g/kg × 1.025
+
+# converting mg/l to ug/L
+DOC_ug <- df_aqm$DOC * 1000
+
+# converting ug/l to umol/L
+df_aqm$DOC_umolL <- DOC_ug / 12.01
+
+# converting umol/l to umol/kg
+df_aqm$DOC_umolKg <- df_aqm$DOC_umolL / 1.025
+
+
+
+```
+
+
+## 3. Plot DOC across FB stations
+```{r}
+
+#, scales = "free_y"
+df_aqm %>%
+  ggplot(aes(Date, DOC)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2)
+
+#ggsave ("Figurer/DOC_FBstations.png", width = 8, height = 6, dpi=500)
+
+# plot DOC with label every 2nd months
+df_aqm %>%
+  ggplot(aes(Date, DOC)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "DOC (mg/L)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/DOC_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+```
+
+## 4. Plot allvariables across FB stations
+```{r}
+
+
+# plot Chla
+df_aqm %>%
+  ggplot(aes(Date, KlfA)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "Chla (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/Chla_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot Chla
+df_aqm %>%
+  ggplot(aes(Date, KlfA)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "Chla (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/Chla_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot No3+NO2
+df_aqm %>%
+  ggplot(aes(Date, NO3_NO2)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "NO3 (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/NO3_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot NH4
+df_aqm %>%
+  ggplot(aes(Date, NH4)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "NH4 (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/NH4_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot PO4
+df_aqm %>%
+  ggplot(aes(Date, PO4)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "PO4 (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/PO4_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot TotN
+df_aqm %>%
+  ggplot(aes(Date, TOTN)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "TOTN (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/TOTN_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+# plot TotP
+df_aqm %>%
+  ggplot(aes(Date, TOTP)) + 
+    geom_point() + geom_line() +
+    facet_wrap(~StationCode, ncol=2) +
+      labs(title = "", x = "", y = "TOTP (µg/l)") +
+        scale_x_date(date_breaks = "2 month", date_labels =  "%m-%y") +
+        theme(axis.text.x=element_text(angle=60, hjust=1))
+
+ggsave ("Figurer/TOTP_FBstations_V2.png", width = 8, height = 6, dpi=500)
+
+```
+
+## 5a.  Ferrybox log data 2019
+We do this before 2018 in order to get the headers (column names),
+which we will use for 2018 data    
+- Data downloaded from Pierre's OneDrive 12.02.2020    
+- [Link to Pierre's OneDrive](https://niva365-my.sharepoint.com/:f:/g/personal/pierre_jaccard_niva_no/Et9g2CZL2_tEg3vOt7ACQh0BHCjrOcKzPz-iAgdYst2ddQ?e=hpkNeW)  
+
+```{r}
+
+df_ferrybox_sampledata_2019_fa <- readxl::read_excel(
+  "Datasett/Ferrybox_samples_OneDrive/FA_2019_automatic_samples.xlsx")
+
+df_ferrybox_sampledata_2019_tf <- readxl::read_excel(
+  "Datasett/Ferrybox_samples_OneDrive/TF_2019_automatic_samples.xlsx")
+
+# names(df_ferrybox_sampledata_2019_fa)
+# names(df_ferrybox_sampledata_2019_tf)
+
+X <- df_samples_fa$SYSTEM_DATE_DMY - ymd_hms("1899-12-31 00:00:00")
+df_samples_fa <- df_samples_fa %>%
+  mutate(TIME = SYSTEM_TIME + X)
+
+# Check
+# df_samples_fa$SYSTEM_DATE_DMY %>% head()
+# df_samples_fa$SYSTEM_TIME %>% head()
+# df_samples_fa$TIME %>% head()
+
+unique(df_samples_fa$SYSTEM_DATE_DMY)
+
+```
+
+## 5b. Ferrybox log data 2018   
+Get dates and filenames ('df_logfilenames')  
+```{r}
+
+get_folders()
+
+#
+# Fantasy
+#
+
+# Get the url for the vessel we want
+url.folder <- get_url_foldername("fantasy")
+
+# Get file names of all log files for that vessel
+samplefiles_fn <- get_filenames_samplefiles("fantasy")
+
+head(samplefiles_fn)
+# Check
+# tail(logfiles_fn)
+
+# Combine with dates 
+df_samplefilenames_fa_2018 <- data.frame(
+  filename = samplefiles_fn,
+  Date = ymd(substr(samplefiles_fn, 9, 16)),   # note that 9,16 is specifically for 'samples'
+  stringsAsFactors = FALSE) %>%
+  filter(year(Date) == 2018)
+
+
+#
+# Trollfjord
+#
+
+# Get the url for the vessel we want
+url.folder <- get_url_foldername("trollfjord")
+
+# Get file names of all log files for that vessel
+samplefiles_fn <- get_filenames_samplefiles("trollfjord")
+
+# Check
+# tail(logfiles_fn)
+
+# Combine with dates 
+df_samplefilenames_tf_2018 <- data.frame(
+  filename = samplefiles_fn,
+  Date = ymd(substr(samplefiles_fn, 9, 16)), # note that 9,16 is specifically for 'samples'
+  stringsAsFactors = FALSE) %>%
+  filter(year(Date) == 2018)
+
+# Combine
+df_samplefilenames_2018 <- 
+  bind_rows(
+    df_samplefilenames_fa_2018 %>% mutate(Ferrybox = "fantasy"),
+    df_samplefilenames_tf_2018 %>% mutate(Ferrybox = "trollfjord")
+  )
+
+```
+
+### Download all  
+Or just use saved log data
+```{r}
+
+redownload_data <- FALSE  # if FALSE, we just read the saved data
+
+
+if (redownload_data){  # takes just a couple of minutes
+  
+  df_ferrybox_sampledata_2018_fa <- get_several_logfiles(
+    df_samplefilenames_fa_2018$filename, 
+    vessel = "fantasy",
+    trace = FALSE)
+  
+  df_ferrybox_sampledata_2018_tf <- get_several_logfiles(
+    df_samplefilenames_tf_2018$filename, 
+    vessel = "trollfjord",
+    trace = FALSE)
+  
+  names(df_ferrybox_sampledata_2018_fa) <- names(df_ferrybox_sampledata_2019_fa)
+  names(df_ferrybox_sampledata_2018_tf) <- names(df_ferrybox_sampledata_2019_tf)
+
+  saveRDS(df_ferrybox_sampledata_2018_fa,
+          "Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+  saveRDS(df_ferrybox_sampledata_2018_tf,
+          "Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+  
+  
+} else {
+  
+  df_ferrybox_sampledata_2018_fa <-
+    readRDS("Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+  df_ferrybox_sampledata_2018_tf <-
+    readRDS("Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+  
+}
+
+
+```
+
+
+### Combine years  
+```{r}
+#
+# FA
+#
+df_ferrybox_sampledata_2018_fa[1:7] %>% str()
+df_ferrybox_sampledata_2019_fa[1:7] %>% str()
+
+df_ferrybox_sampledata_2018_fa <- df_ferrybox_sampledata_2018_fa %>%
+  mutate(SYSTEM_DATE_DMY = dmy_hms(paste(SYSTEM_DATE_DMY, "00:00:00")),
+         SYSTEM_TIME = ymd_hms(paste("1899-12-31", SYSTEM_TIME)))
+
+df_ferrybox_sampledata_fa <- bind_rows(
+  df_ferrybox_sampledata_2018_fa,
+  df_ferrybox_sampledata_2019_fa)
+
+#
+# Trollfjord
+#
+df_ferrybox_sampledata_2018_tf[1:7] %>% str()
+df_ferrybox_sampledata_2019_tf[1:7] %>% str()
+
+df_ferrybox_sampledata_2018_tf <- df_ferrybox_sampledata_2018_tf %>%
+  mutate(SYSTEM_DATE = dmy_hms(paste(SYSTEM_DATE, "00:00:00")),
+         SYSTEM_TIME = ymd_hms(paste("1899-12-31", SYSTEM_TIME)))
+
+df_ferrybox_sampledata_tf <- bind_rows(
+  df_ferrybox_sampledata_2018_tf,
+  df_ferrybox_sampledata_2019_tf)
+
+names(df_ferrybox_sampledata_fa)
+names(df_ferrybox_sampledata_tf)
+
+# df_ferrybox_sampledata <- 
+#   bind_rows()
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+## 6. Station positions and dates   
+df_station_date
+```{r}
+
+df_station_pos <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", sheet = "StationPoint")
+
+my_map <- map_data("world", c("Norway", "Sweden"))
+
+ggplot(df_station_pos, aes(x = Longitude, y = Latitude)) +
+  geom_text(aes(label = StationCode)) +
+  annotation_map(my_map, fill = NA, color = "blue")
+
+df_station_pos <- df_station_pos %>%
+  mutate(Ferrybox = ifelse(StationCode %in% "VT4", "fantasy", "trollfjord"))
+
+# One line per station/date combination in data
+df_station_date <- df_aqm %>%
+  count(StationCode, Date) %>%
+  left_join(subset(df_station_pos, select = c(StationCode, Latitude, Longitude, Ferrybox)))
+
+df_station_date
+
+```
+
+### Check sample files
+```{r}
+
+df <- read.table("Datasett/samples_20180314-083000.txt")
+df <- read.table("Datasett/samples_20180420-081001.txt")
+names(df) <- colnames.TF
+names(df)[29:33] <- paste0("X", 1:5)
+  
+library(leaflet)
+leaflet() %>%
+  addTiles() %>%
+  addMarkers(lng = df$Lon, lat = df$Lat,
+             popup = df$ASAMP)
+
+```
+
+
+
+## 7. Get list of ferrybox data files to download  
+
+### Get closest Ferrybox date for all lab-data dates  
+'df_logfilenames_closest'  
+```{r}
+
+# Functrion for getting Ferrybox dat closest to the given 'date'
+# Returns a data frame
+get_closest_day <- function(date, ferryboxline, ferryboxfilenames){
+  ferryboxfilenames %>%
+    filter(Ferrybox %in% ferryboxline) %>%
+    mutate(Days_diff = (Date - date)/ddays(1)) %>%                     # difference in number of days
+    filter(abs(Days_diff) %in% min(abs(Days_diff), na.rm = TRUE)) %>%  # get the smallest difference
+    rename(Date_ferrybox = Date) %>%  # To avoid confusion
+    mutate(Date_lab = date, Ferrybox = ferryboxline)
+    }
+# Test
+
+get_closest_day(ymd("2018-07-20"), "fantasy", ferryboxfilenames = df_logfilenames)
+get_closest_day(ymd("2018-07-20"), "trollfjord", ferryboxfilenames = df_logfilenames)
+
+get_closest_day(ymd("2018-07-20"), data = df_tf_logfilenames)
+
+lab_dates <- df_station_date %>%
+  count(Ferrybox, Date)
+    
+lab_dates <- unique(df_station_date$Date)
+names(lab_dates) <- lab_dates  # Makes it possible to include lab_dates in the final result (using '.id = ...')   
+
+df_logfilenames_closest_day <- lab_dates %>% 
+  map_dfr(get_closest_day, data = df_fa_logfilenames, .id = "Date_labdata") %>%
+  mutate(Date_labdata = ymd(Date_labdata))
+ <- dates %>% map_dfr(get_closest, .id = "Date_labdata")
+
+```
+
+### Add ferrybox data file name to 'df_station_date'  
+```{r}
+
+df_station_date <- df_station_date %>%
+  left_join(df_logfilenames_closest, by = c("Date" = "Date_labdata"))
+
+```
+
+### Check lab dates that were not found in Ferrybox  
+```{r}
+
+dfx <- df_station_date %>%
+  filter(Days_diff != 0) %>%
+  select(StationCode, Date, Date_ferrybox, Days_diff) %>%
+  arrange(Date)
+
+dfx
+
+write.table(dfx, "clipboard", sep = "\t")
+
+```
+
+## 8. Get all ferrybox data  
+A couple of minutes  
+```{r}
+fb_data <- get_several_logfiles(
+  unique(df_station_date$filename), 
+  vessel = "fantasy",
+  trace = FALSE)
+
+#dim(fb_data)
+#test <- head(fb_data)
+#colnames(test) <- colnames.FA
+#test 
+
+colnames(fb_data) <- colnames.FA
+
+names(fb_data)[32:33] <- c("X1", "X2")
+
+# 
+# Time
+#
+fb_data <- fb_data %>%
+  rename(Date_text = Date) %>%
+  mutate(Date = dmy(Date_text),
+         Time = dmy_hms(paste(Date_text, TimeOfDay)),
+         Month = month(Time),
+         Year = year(Time)
+  )
+
+
+
+```
+
+## 9. Select ferrybox data for each position  
+
+### Funcion: find closest latitude  
+```{r}
+# sort(unique(fb_data$Date)) %>% head()
+
+# Hard-coded: variable names 'Date', 'Lat'
+# Returns data frame
+getdata_closest_latitude <- function(latitude, data, max_difference = 0.1){
+  df <- data %>%
+    group_by(Date) %>%
+    mutate(Lat_diff = Lat - latitude) %>%
+    filter(abs(Lat_diff) == min(abs(Lat_diff), na.rm = TRUE)) %>%
+    filter(Lat_diff <= max_difference) %>%
+    arrange(Date)
+  check <- df %>%
+    count(Date)
+  cat("Lat:", latitude, "returned maximum", max(check$n, na.rm = TRUE), "lines per date\n")
+  df
+}
+# Test 1
+# df <- get_closest_latitude(57, fb_data) #  %>% select(Time, Lat, Lon, Lat_diff, TEMP_IN)
+
+# Test 2
+getdata_closest_latitude(59.7, fb_data) %>%
+  ggplot(aes(Date, TEMP_IN)) +
+  geom_line() + geom_point()
+    
+```
+
+### Select ferrybox data for each station   
+Here, we use latitude only as the route is pretty much N-s    
+```{r}
+# LAtitudes to use to select data
+latitudes <- df_station_pos$Latitude
+names(latitudes) <- df_station_pos$StationCode
+
+# Select all these 
+fb_data_selected <- latitudes %>% map_dfr(getdata_closest_latitude, 
+                                          data = fb_data, 
+                                          .id = "StationCode")
+fb_data_selected <- fb_data_selected %>%
+  rename(Date_ferrybox = Date)
+
+fb_data_selected %>%
+  count()
+
+```
+
+### Add ferrybox data to df_aqm  
+```{r}
+
+nrow(df_aqm)
+df_aqm <- df_aqm %>%
+  left_join(subset(df_logfilenames_closest, 
+                   select = c(Date_labdata, Date_ferrybox, Days_diff)),
+            by = c("Date" = "Date_labdata")) %>%
+  left_join(subset(fb_data_selected, 
+                   select = c(StationCode, Date_ferrybox, TimeOfDay, Lon, Lat, 
+                              PUMP, VAL, TURB, FLU, TEMP_IN, SAL, OX_CONC)),
+            by = c("StationCode", "Date_ferrybox"))
+nrow(df_aqm)
+
+```
+
+
+```{r}
+
+ggplot(df_aqm, aes(Date, TEMP_IN, color = StationCode)) +
+  geom_line() + geom_point()
+
+```
+
+
+```{r}
+# Dates in data
+i <- 1
+pos <- c(df_station_pos$Longitude[i], df_station_pos$Latitude[i])
+
+get_closest_pos <- function(pos)
+
+fb_data %>%
+  arrange(Date)
+  
+  
+df_dates <- unique(df$Date)
+
+plot()
+
+#
+# Read latest 20 files
+#
+# debugonce(get_several_logfiles )
+fb_data <- get_several_logfiles(tail(df_files_fn, 20), vessel = "fantasy")
+
+#dim(fb_data)
+#test <- head(fb_data)
+#colnames(test) <- colnames.FA
+#test 
+
+colnames(fb_data) <- colnames.FA
+
+# 
+# Time
+#
+fb_data$Time <- dmy(fb_data$Date) + hms(fb_data$TimeOfDay)
+fb_data$Date <- floor_date(fb_data$Time, "day")
+fb_data$Month <- month(fb_data$Time)
+
+```
+
