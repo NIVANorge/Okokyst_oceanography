@@ -259,8 +259,10 @@ check_sums_n3 <- function(data, max_n = 30){
 # check_sums_n2(dat2)
 # check_sums_n3(dat2)
 
+# Check whether TotP is smaller or equal to phosphate + particular P (TOTP_P)   
 
-check_sums_p1 <- function(data, max_n = 30){
+check_sums_p1 <- function(data, 
+                          max_n = 30){   # Max number of cases to show
   # TOTP vs PO3 + TOTP_P
   # TOTP too small in 63 cases (ca 4%)
   df <- data %>%
@@ -290,7 +292,9 @@ check_sums_p1 <- function(data, max_n = 30){
   # ggplot(df, aes(Check)) + geom_histogram()
   
   
-check_sums_p2 <- function(data, max_n = 30){
+# Check whether TotP is smaller or equal to phosphate     
+check_sums_p2 <- function(data, 
+                          max_n = 30){   # Max number of cases to show
   # TOTP vs PO3
   # TOTP too small in 23 cases (ca 4%)
   df <- data %>%
