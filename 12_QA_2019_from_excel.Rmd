@@ -1,11 +1,11 @@
 ---
-title: "12_QA_2019_from_excel"
+title: "QA for ØKOKYST 2019 report (January 2020)"
 author: "DHJ"
 date: "13 1 2020"
 output: html_document
 ---
 
-# QA for ØKOKYST 2019 report (January 2020)    
+
 
 **Section 2-7 = Skagerrak, done by André**  
 See  
@@ -19,7 +19,7 @@ See
 - Analyserapporter finnes i (eksempel):
 K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Skagerrak O-17089_19089\Hydrografi\Analyserapport_2017
 
-**Section 11-13 = Norskehavet Sør I, done by Caroline**   
+**Section 11-15 = Norskehavet Sør I, done by Caroline**   
 -  Checked input to this file:  
 `K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`  
 
@@ -53,6 +53,8 @@ library(RColorBrewer)
 # library(niRvana)
 
 source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")          # used in section 15  
+
 
 # RColorBrewer::display.brewer.all()
 ```
@@ -750,5 +752,158 @@ NIVAklass_get_chl_quantiles(df)
 
 
 ```
+
+
+## 15. Bottom O2  
+Code from script 13 '13_QA_CTD_2019.Rmd'    
+Remember that oxygen should be in ml/L! - See below  
+```{r}
+### Folders
+
+basefolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/"
+
+# Norskehavet Sør I
+folder1 <- "OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor"
+
+#
+# Get data frame with one line per data file
+#
+# 1. Find sheet names here: (can be commented out afterwards)
+# sheets_in_folder(folder1)                                 
+# 2. Enter the sheet names here:  
+fileinfo <- vars_in_folder(folder1, c("data","data","Data"))       
+
+#
+# Get data as list
+#
+datalist <- seq_len(nrow(fileinfo)) %>% map(read_data_fileno, df_fileinfo = fileinfo)
+
+#
+# Get data frame with one line per station
+# NOTE: Not actally needed
+#
+fileinfo_stations <- seq_len(nrow(fileinfo)) %>% map_df(get_stations)
+fileinfo_stations
+```
+
+### Check and combine all data   
+Remember that oxygen should be in ml/L!   
+```{r}
+# Check variable names of each dataset
+map(datalist, names)
+
+map(datalist, ~"StationCode" %in% names(.))   # note StationId instead of StationCode in 3rd file!
+
+# Check start of file of each dataset
+map(datalist, head)  
+
+# For file no 3, we want Oxygen__1! (oxygen in ml/L)
+#   (inspect 2nd row of Excel file)
+# So we delete the original Oksygen and make a new one
+datalist[[3]] <- datalist[[3]] %>%
+  select(-Oksygen) %>%
+  rename(Oksygen = Oksygen__1) %>%
+  rename(StationCode = StationId)    # Also remember this!
+
+# datalist[[3]] %>% filter(Depth1 == 200.5) %>% View("Data no 3")
+
+# Combine
+data_all <- bind_rows(datalist)
+
+# Check
+# data_all %>% filter(Depth1 == 200.5) %>% View("Data_all")
+
+```
+
+
+### VR51  
+```{r}
+dat <- data_all %>%
+  filter(StationCode %in% "VR51")
+
+# Plot data availablity 1 - number of data with/without Oxygen
+dat %>%
+  count(Date, Has_data = !is.na(Oksygen)) %>%
+  ggplot(aes(Date, n, color = Has_data)) + 
+  geom_vline(aes(xintercept = Date), color = "grey60") +
+  geom_point()
+
+# Plot data availablity 2 - max depth
+dat %>%
+  filter(!is.na(Oksygen)) %>%
+  group_by(Date) %>%
+  summarise(Max_depth = max(Depth1)) %>%
+  ggplot(aes(Date, Max_depth)) + 
+  geom_vline(aes(xintercept = Date), color = "grey60") +
+  geom_point()
+
+```
+
+### Get oxygen at max depth    
+Mean for last 3 years = 3.844558    
+Mean for last 3 years, winer only = 3.641219   
+```{r}
+
+dat_bottom <- dat %>%
+  filter(!is.na(Oksygen)) %>%
+  group_by(Date) %>%
+  mutate(Max_depth = max(Depth1)) %>%
+  filter(Depth1 == Max_depth & Depth1 > 230) # 230 is from plot above
+
+dat_o2min <- dat %>%
+  filter(!is.na(Oksygen)) %>%
+  group_by(Date) %>%
+  mutate(Min_O2 = min(Oksygen)) %>%
+  filter(Oksygen == Min_O2) %>%
+  summarise(Oksygen = mean(Oksygen), Depth1 = mean(Depth1))
+
+dat_o2min %>% select(Date, Oksygen, Depth1)
+  
+dat_oxygen <- bind_rows(
+  dat_bottom %>% select(Date, Oksygen, Depth1) %>% mutate(Position = "Bottom"),
+  dat_o2min %>% select(Date, Oksygen, Depth1) %>% mutate(Position = "O2-minimum")
+)
+
+time_1may = ymd_hms(c(20170501000000, 20180501000000, 20190501000000))
+time_1oct = ymd_hms(c(20171001000000, 20181001000000, 20191001000000))
+
+ggplot(dat_bottom, aes(Date, Oksygen)) +
+  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
+  geom_line() +
+  geom_point(aes(color = Depth1)) +
+  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
+
+ggplot(dat_o2min, aes(Date, Oksygen)) +
+  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
+  geom_line() +
+  geom_point(aes(color = Depth1)) +
+  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
+
+ggplot(dat_oxygen, aes(Date, Oksygen, color = Position)) +
+  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
+
+
+# Mean oxygen for all months
+dat_oxygen %>%
+  group_by(Position) %>%
+  summarise(Oksygen = mean(Oksygen))
+
+# Mean oxygen for winter (Sept - April)
+dat_oxygen %>%
+  filter(month(Date) <= 4 | month(Date) >= 9) %>%
+  group_by(Position) %>%
+  summarise(Oksygen = mean(Oksygen))
+
+```
+
+
+### VT71
+```{r}
+
+```
+
 
 
