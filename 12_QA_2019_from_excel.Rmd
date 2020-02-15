@@ -1,5 +1,5 @@
 ---
-title: "QA for ØKOKYST 2019 report (January 2020)"
+title: "12. QC for ØKOKYST (January 2020)"
 author: "DHJ"
 date: "13 1 2020"
 output: html_document
@@ -39,7 +39,8 @@ Vinter er november til og med februar
 Sommer er juni til og med august  
 
   
-## 1. Libraries
+## 1. Libraries   
+After this chunk, you can skip to 11 if you ony want the Norskehavet Sør 1 results  
 ```{r}
 
 library(dplyr)
@@ -538,7 +539,7 @@ check
 
 
 
-## 11. Read Norskehavet Nord I files  
+## 11. Read Norskehavet Nord I files   
 Used by Caroline     
 ```{r}
 # Based on section 5 above
@@ -637,63 +638,120 @@ nutrient_plot_p("VR51", 0)
   
 ### Nutrients, get mean values from raw data   
 - Compare with vallues used in NIVAclass excel sheets here:  
-`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`  
-- Got close to the numbers used for VT71, but not enough to change class for any of them 
-- Got exactly same numbers as those used for VR51  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`    
+- VT71: Results not equal to the numbers used for VT71, but so close that none of them change class  
+- VR51: Got exactly same numbers as those used
+### Plot surface values for each depth/station over time  
+```{r, fig.width = 8, fig.height = 5.5}
+
+# order_as_excel <- c("VT71", "VR51")
+
+plotdata <- dat2
+nrow(plotdata)
+
+depths <- c(0, 0.5, 5, 10)
+vars <- c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N")
+stations <- unique(plotdata$StationCode)
+
+years <- 2017:2019
+months <- list(c(6,7,8), c(1,2,12))
+names(months) <- c("Summer", "Winter")
+
+for (station in stations){
+  for (i in seq_along(months)){
+    df <- plotdata %>%
+      mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
+      mutate(Depth1 = factor(Depth1)) %>%
+      filter(Variable %in% vars & 
+               Depth1 %in% depths &
+               month(Time) %in% months[[i]] & 
+               year(Time) %in% years &
+               StationCode %in% station)
+    gg <- ggplot(df, aes(Time, Value, color = Depth1)) +
+      geom_point() +
+      geom_line() +
+      facet_wrap(vars(Variable), scales = "free_y") + 
+      labs(title = paste0(station, ", ", 
+                         names(months)[[i]])) +
+      scale_x_datetime(breaks = "1 year", date_labels = "%d.%m.%y") +
+      theme(axis.text.x = element_text(hjust = 0, angle = -45))
+    print(gg)
+  }
+}
+
+
+```
+
+### Plot weighted surface values over time   
+- 4 plots, one per station and season
+- Note extremely high ammonium value in VR51 winter (see section "Seasonal mean values)  
+```{r, fig.width = 8, fig.height = 5.5}
+
+# Delete two extremely high ammonium values 
+nrow(dat2)
+sel <- with(dat2,
+            StationCode == "VR51" & 
+              Variable %in% "NH4-N" &
+              month(Time) == 2 &
+              Value > 80)
+sum(sel)
+
+plotdata <- dat2[!sel,]
+nrow(plotdata)
+
+
+# order_as_excel <- c("VT71", "VR51")
+
+months <- list(c(6,7,8), c(1,2,12))
+names(months) <- c("Summer", "Winter")
+
+for (i in seq_along(months)){
+  df <- NIVAklass_get_mean_overdepth(
+    years = 2017:2019,
+    data = plotdata,
+    vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
+    months = months[[i]])
+  gg <- ggplot(df, aes(Time, Value, color = StationCode)) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(vars(Variable), scales = "free_y") + 
+    labs(title = names(months)[[i]]) +
+    scale_x_datetime(breaks = "1 year", date_labels = "%d.%m.%y") +
+    theme(axis.text.x = element_text(hjust = 0, angle = -45))
+  print(gg)
+}
+
+```
+
+### Seasonal mean values  
+- Compare with vallues used in NIVAclass excel sheets here:  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`    
+- VT71: Results not equal to the numbers used for VT71, but so close that none of them change class  
+- VR51: Very samll difference between weighted and unweighted means. Got exactly same numbers as those used if we used equal weights for 0,5 and 10 meters.   
+- VR51, ammonium in winter: before deleting 2 very high February values, we have unweighted mean = 49.09, in Excel 23.63. After deleting, they are quite close.  
 ```{r}
-# dput(unique(dat2$Variable))
+#
+# Weights = 0.25,0.5,0.25 for 0,5 and 10 meters
+#
+df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, plotdata)
 
-# Total fosfor (μg P/l), vinter
-# Fosfat-fosfor (μg P/l), vinter
-# Total nitrogen (μg N/l), vinter
-# Nitrat-nitrogen (μg N/l), vinter
-# Ammonium-nitrogen (μg N/l), vinter
+df_mean_nutrients %>%
+  filter(StationCode == "VT71" & Season == "Summer")
 
-order_as_excel <- c("VT71", "VR51")
+df_mean_nutrients %>%
+  filter(StationCode == "VT71" & Season == "Winter")
 
-NIVAklass_get_meanvalues <- function(years, data, vars, months, depths = c(0,5,10)){
-  data %>%
-    mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
-    filter(Variable %in% vars & 
-             Depth1 %in% depths &
-             month(Time) %in% months & year(Time) %in% years &
-             StationCode %in% order_as_excel) %>% 
-    group_by(StationCode, Variable) %>%
-    summarize(Value = mean(Value)) %>%
-    mutate(Variable = factor(Variable, levels = vars)) %>%
-    arrange(Variable)
-}
+df_mean_nutrients %>%
+  filter(StationCode == "VR51" & Season == "Summer")
 
-NIVAklass_summervalues <- function(years, data){
-  NIVAklass_get_meanvalues(years = years, 
-                           data = data, 
-                           # Same order as in NIVAklass Excel sheet:
-                           vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
-                           months = c(6,7,8)
-                           )
-}
+df_mean_nutrients %>%
+  filter(StationCode == "VR51" & Season == "Winter")
 
-NIVAklass_wintervalues <- function(years, data){
-  NIVAklass_get_meanvalues(years = years, 
-                           data = data, 
-                           # Same order as in NIVAklass Excel sheet:
-                           vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
-                           months = c(1,2,12)
-                           )
-}
-
-NIVAklass_nutrientvalues <- function(years, data){
-  df_nut_summer <- NIVAklass_summervalues(years, data) %>%
-    mutate(Season = "Summer") %>%
-    select(StationCode, Season, Variable, Value)
-  df_nut_winter <- NIVAklass_wintervalues(years, data) %>%
-    mutate(Season = "Winter") %>%
-    select(StationCode, Season, Variable, Value)
-  bind_rows(df_nut_summer, df_nut_winter) %>%
-    arrange(StationCode, Season, Variable)
- }
-
-df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, dat2)
+#
+# Weights = same for 0,5 and 10 meters
+#
+df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, plotdata, 
+                                              depths_weights = c(1,1,1))
 
 df_mean_nutrients %>%
   filter(StationCode == "VT71" & Season == "Summer")
@@ -709,9 +767,23 @@ df_mean_nutrients %>%
 
 ```
 
+```{r}
+  data %>%
+    mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
+    filter(Variable %in% vars & 
+             Depth1 %in% depths &
+             month(Time) %in% months & year(Time) %in% years &
+             StationCode %in% order_as_excel) %>% 
+    group_by(StationCode, Variable) %>%
+    summarize(Value = mean(Value)) %>%
+    mutate(Variable = factor(Variable, levels = vars)) %>%
+    arrange(Variable)
+}
+```
+
 ## 14. Chl a quantiles    
-- Fairly big difference for VR51 - 3.01 used in Excel, got 3.64 here   
-- Small difference for VT711 - 1.78 used in Excel, got 1.78 here    
+- VR51: Fairly big difference - 3.01 used in Excel, got 3.64 here   
+- VT71: Small difference - 1.78 used in Excel, got 1.72 here    
 ```{r}
 
 NIVAklass_get_chl_data <- function(years, data, months = 2:10, depths = c(0,5,10)){
@@ -746,7 +818,7 @@ NIVAklass_get_chl_quantiles <- function(chldata){
 
 df <- NIVAklass_get_chl_data(2017:2019, dat2)
 
-df
+# df
 NIVAklass_plot_chl(df)
 NIVAklass_get_chl_quantiles(df)
 
@@ -754,9 +826,12 @@ NIVAklass_get_chl_quantiles(df)
 ```
 
 
-## 15. Bottom O2  
-Code from script 13 '13_QA_CTD_2019.Rmd'    
-Remember that oxygen should be in ml/L! - See below  
+## 15. Bottom O2    
+- NOTE: Here we just check *CTD* values - the classification uses Winkler values from samples    
+- Couldnæt find the lab values (at least not for 2019)  
+  
+Code from script 13 '13_QA_CTD_2019.Rmd'     
+Remember that oxygen should be in ml/L! - See below   
 ```{r}
 ### Folders
 
@@ -784,11 +859,13 @@ datalist <- seq_len(nrow(fileinfo)) %>% map(read_data_fileno, df_fileinfo = file
 #
 fileinfo_stations <- seq_len(nrow(fileinfo)) %>% map_df(get_stations)
 fileinfo_stations
+
 ```
 
 ### Check and combine all data   
 Remember that oxygen should be in ml/L!   
 ```{r}
+
 # Check variable names of each dataset
 map(datalist, names)
 
@@ -816,7 +893,9 @@ data_all <- bind_rows(datalist)
 ```
 
 
-### VR51  
+### VR51
+
+#### Data availability and max depth  
 ```{r}
 dat <- data_all %>%
   filter(StationCode %in% "VR51")
@@ -839,9 +918,7 @@ dat %>%
 
 ```
 
-### Get oxygen at max depth    
-Mean for last 3 years = 3.844558    
-Mean for last 3 years, winer only = 3.641219   
+#### Get oxygen at max depth    
 ```{r}
 
 dat_bottom <- dat %>%
@@ -854,48 +931,63 @@ dat_o2min <- dat %>%
   filter(!is.na(Oksygen)) %>%
   group_by(Date) %>%
   mutate(Min_O2 = min(Oksygen)) %>%
-  filter(Oksygen == Min_O2) %>%
-  summarise(Oksygen = mean(Oksygen), Depth1 = mean(Depth1))
+  filter(Oksygen == Min_O2) %>% # select(Date, Oksygen, Depth1)
+  summarise(Oksygen = mean(Oksygen), 
+            Oksygenmetning = mean(Oksygenmetning), 
+            Depth1_min = min(Depth1),
+            Depth1_max = max(Depth1),
+            Depth1 = mean(Depth1)
+            )
 
-dat_o2min %>% select(Date, Oksygen, Depth1)
-  
+# Check those where mn oxygen occurs over several depths
+dat_o2min %>% 
+  filter(Depth1_min < Depth1_max) %>%
+  select(Date, Oksygen, Depth1, Depth1_min, Depth1_max)
+
 dat_oxygen <- bind_rows(
-  dat_bottom %>% select(Date, Oksygen, Depth1) %>% mutate(Position = "Bottom"),
-  dat_o2min %>% select(Date, Oksygen, Depth1) %>% mutate(Position = "O2-minimum")
+  dat_bottom %>% 
+    select(Date, Oksygen, Oksygenmetning, Depth1) %>% 
+    mutate(Position = "Bottom"),
+  dat_o2min %>% 
+    select(Date, Oksygen, Oksygenmetning, Depth1) %>% 
+    mutate(Position = "O2-minimum")
 )
 
-time_1may = ymd_hms(c(20170501000000, 20180501000000, 20190501000000))
-time_1oct = ymd_hms(c(20171001000000, 20181001000000, 20191001000000))
+dat_oxygen
 
-ggplot(dat_bottom, aes(Date, Oksygen)) +
-  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
-  geom_line() +
-  geom_point(aes(color = Depth1)) +
-  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
+```
 
-ggplot(dat_o2min, aes(Date, Oksygen)) +
-  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
-  geom_line() +
-  geom_point(aes(color = Depth1)) +
-  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
-
-ggplot(dat_oxygen, aes(Date, Oksygen, color = Position)) +
-  geom_vline(xintercept = c(time_1may, time_1oct), linetype = "dotted") +
-  geom_line() +
-  geom_point() +
-  geom_hline(yintercept = seq(1.5, 4.5, 1), linetype = "dashed", color = "red3")
+#### PLot time series 
+```{r}
+plot_ts(dat_oxygen, 2017:2019, 
+        y_variable = "Oksygen", category_variable = "Position", 
+        quality_type = "Concentration")
+plot_ts(dat_oxygen, 2017:2019,  category_variable = "Position",
+        y_variable = "Oksygenmetning", 
+        quality_type = "Saturation")
 
 
+```
+
+#### Make means  
+Mean for last 3 years = 3.844558    
+Mean for last 3 years, winer only = 3.641219   
+
+```{r, results = 'asis'}
 # Mean oxygen for all months
 dat_oxygen %>%
   group_by(Position) %>%
-  summarise(Oksygen = mean(Oksygen))
+  summarise(Oksygen = mean(Oksygen), 
+            Oksygenmetning = mean(Oksygenmetning)) %>%
+  knitr::kable(caption = "Mean oxygen for all months")
 
 # Mean oxygen for winter (Sept - April)
 dat_oxygen %>%
   filter(month(Date) <= 4 | month(Date) >= 9) %>%
   group_by(Position) %>%
-  summarise(Oksygen = mean(Oksygen))
+  summarise(Oksygen = mean(Oksygen),
+            Oksygenmetning = mean(Oksygenmetning)) %>%
+  knitr::kable(caption = "Mean oxygen for winter (Sept - April)")
 
 ```
 
