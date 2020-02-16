@@ -336,8 +336,8 @@ plot_ts <- function(data,
                     quality_lines_y = NULL,   # can be used to override 'quality_type'
                     quality_labels_y = NULL,  # must be given if quality_lines_y is given
                     quality_labels = NULL,     # must be given if quality_lines_y is given
-                    qualitylabel_x = -0.05,
-                    title = NULL){ # 0 to 1; position of "SG", "G" etc.
+                    qualitylabel_x = -0.05,    # 0 to 1; position of "SG", "G" etc.
+                    title = NULL){ 
   # Limits of x axis
   if (is.null(time_limits)){
     time_limits <- c(ymd(min(years)*10000 + 0101, tz = "GMT"),
@@ -370,9 +370,9 @@ plot_ts <- function(data,
     }
   }
   if (is.null(category_variable)){
-    gg <- ggplot(dat_oxygen, aes(Date, .data[[y_variable]]))    
+    gg <- ggplot(data, aes(Date, .data[[y_variable]]))    
   } else {
-    gg <- ggplot(dat_oxygen, aes(Date, .data[[y_variable]], 
+    gg <- ggplot(data, aes(Date, .data[[y_variable]], 
                                  color = .data[[category_variable]]))    
   }
   gg <- gg + 
@@ -401,7 +401,10 @@ plot_ts <- function(data,
     theme_bw()
   if (!is.null(category_variable))
     gg <- gg +
-    scale_color_discrete(category_variable)
+      scale_color_discrete(category_variable)
+  if (!is.null(title))
+    gg <- gg +
+      labs(title = title)
   gg  
   }
 
