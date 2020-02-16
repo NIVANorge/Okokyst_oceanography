@@ -118,39 +118,61 @@ nutrient_plot_n <- function(stationcode, depth, years = 2017:2019, print_plot = 
   
 }
 
-nutrient_plot_p <- function(stationcode, depth, years = 2017:2019, print_plot = TRUE, limit = 15){
+nutrient_plot_p <- function(stationcode, depth, years = 2017:2019, print_plot = TRUE, limit = 15,
+                            nutrients = c("TOTP", "TOTP_P", "PO4-P")){
   
   cols <- c(brewer.pal(3, "Set1"), "black")
+  names(cols) <- c("TOTP", "TOTP_P", "PO4-P", "Sum")
+
+  linetypes <- c(1,1,1,2)
+  names(linetypes) <- c("TOTP", "TOTP_P", "PO4-P", "Sum")
+  
+  shapes <- c(1,1,1,2)
+  names(shapes) <- c("TOTP", "TOTP_P", "PO4-P", "Sum")
   
   # Data used to make df_line and df2
   df1 <- dat2 %>%
     filter(Depth1 %in% depth & StationCode %in% stationcode & year(Time) %in% years &
-             Variable %in% c("TOTP", "TOTP_P", "PO4-P") & 
+             Variable %in% nutrients & 
              !is.na(Value)) %>%
     select(StationCode, Time, Depth1, Variable, Value) %>%
-    pivot_wider(names_from = Variable, values_from = Value) %>%
-    mutate(Sum = `PO4-P` + `TOTP_P`,
-           Percent = round(Sum/TOTP*100, 1))
+    pivot_wider(names_from = Variable, values_from = Value)
+  if ("TOTP_P" %in% nutrients){
+    df1 <- df1 %>%
+      mutate(Sum = `PO4-P` + `TOTP_P`,
+             Percent = round(Sum/TOTP*100, 1))
+  } else {
+    df1 <- df1 %>%
+      mutate(Sum = `PO4-P`,
+             Percent = round(Sum/TOTP*100, 1))
+  }
   
   # Data for plot
   df2 <- df1 %>%
     pivot_longer(-c(StationCode, Time, Depth1, Percent), names_to = "Variable", values_to = "Value") %>%
-    mutate(Variable = factor(Variable, levels = c("TOTP", "TOTP_P", "PO4-P", "Sum")))  # For order
+    mutate(Variable = factor(Variable, levels = c("TOTP", "TOTP_P", "PO4-P", "Sum")))  # For order  
+  
+  if (!"TOTP_P" %in% nutrients){
+    df2 <- df2 %>%
+      filter(Variable != "Sum")
+  }
   
   # Data used for vertical lines where sum is >= 15% higher than TOTN
   df_line <- df1 %>%
     filter(Percent > 115) 
-  
+
   # Plot
   gg <- ggplot(df2, aes(Time, Value)) +
     geom_vline(xintercept = df_line$Time, color = "black", linetype = 2) +
     geom_line(aes(color = Variable, 
-                  linetype = (Variable == "Sum"))) + 
+                  linetype = Variable)) + 
     geom_point(aes(color = Variable,
-                   shape = (Variable == "Sum")), size = 2) +
+                   shape = Variable), size = 2) + 
     scale_color_manual(values = cols) +
+    scale_linetype_manual(values = linetypes) +
+    scale_shape_manual(values = shapes) +
     labs(title = paste("Station", stationcode, "- depth", depth, "m"))
-  
+    
   if (print_plot)
     print(gg)
   
