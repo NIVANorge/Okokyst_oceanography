@@ -1,0 +1,529 @@
+---
+title: "17. QC Norskehavet Nord I"
+author: "DHJ"
+date: "16 2 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    keep_md: true
+---
+
+**QC of Norskehavet Sør I (Caroline + Lars)**      
+- Checked input to these files:  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`
+- Stations:
+    + VT71 Skinnbrokleia
+    + VR51 Korsen
+    + VT72 Herøyfjorden (Ferrybox station)
+
+
+   
+**Veileder:**  
+- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- Chlorophyll: page 91.   
+"I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
+"Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
+90% percentiles should be used   
+  
+- Also see calculation example on on page 187-189, and the comment on page 189:  
+"Det gjøres oppmerksom på at dataprogrammene som beregner 90-persentil, gjerne benytter ulike metoder". We use the Excel method PERCENTILE.EXC, corresponding to type 6 quantiles in R  
+  
+- Nutrients: page 102 in veileder  
+Vinter er november til og med februar   
+Sommer er juni til og med august  
+
+  
+## 0. Libraries   
+If you ony want to look at Norskehavet Sør 1  you can skip to 11 after this chunk      
+```{r}
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(knitr)         
+library(RColorBrewer)
+
+# library(niRvana)
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")          # used in section 15  
+
+
+# RColorBrewer::display.brewer.all()
+```
+
+
+
+## 1. Read Norskehavet Nord I files   
+Used by Caroline     
+```{r}
+# Based on section 5 above
+
+fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/AqM_download_2019/AqM_2019_NH_Sor1_des2019.xlsx"
+
+dat_broad <- AqMexport_read_waterchemistry(fn, reformat_long = FALSE)   # 30 seconds
+dat1 <- AqMexport_reformat_long(dat_broad, remove_duplicates = FALSE)
+dat2 <- AqMexport_remove_duplicates(dat1)
+
+xtabs(~StationCode + ProjectId, dat2)
+
+# Skinnbrokleia = VT71!
+# delete duplicate data in ProjectID "6342,11946", "6342,6342,11946,11946" 
+dat2 <- dat2 %>%
+  filter(StationCode != "Skinnbrokleia")   
+
+```
+
+### Checks
+```{r}
+
+# Check
+xtabs(~Variable, dat2)
+xtabs(~Variable + StationCode, dat2)
+
+# Check - note that 0.5 m was used instead of 0 m before 2017  
+dat2 %>%
+  filter(Variable %in% "NO3+NO2-N") %>%
+  xtabs(~Depth1 + year(Time), .)
+
+# Check
+# NO3+NO2-N and NH4-N used all years  
+# NO2 + NO3 not used
+dat2 %>%
+  filter(Variable %in% c("TOTN", "NH4-N", "NO3+NO2-N", "NO2-N", "NO3-N", "PON") & !is.na(Value)) %>%
+  xtabs(~Variable + year(Time), .)
+  
+
+# Check
+dat2 %>%
+  filter(Variable %in% "NO3+NO2-N" & Depth1 %in% c(0,5,10) & year(Time) == 2017 & month(Time) == 2)
+
+dat2 %>%
+  mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
+  filter(Variable %in% "NO3+NO2-N" & Depth1 %in% c(0, 30)) %>%
+  ggplot(aes(Time, Value, color = factor(Depth1))) +
+  geom_line() + geom_point() +
+  facet_grid(vars(StationCode), vars(Depth1))
+  
+
+```
+
+## 2. Nutrients, check sums
+### N, plot biggest discrepancy   
+- Plots all N variables (colors/circles), plus the sum of inorganic N (NH4 + NO3 + NO2) in black  
+- Dotted vertical line(s) indicates where the sum is 15% higher than TOTN (example: VT67, 0 m)  
+```{r}
+
+nutrient_plot_n("VT71", 0)
+nutrient_plot_n("VR51", 0)
+
+```
+
+
+
+
+### Check sums of P variables   
+Check whether  
+1) TotP is smaller or equal to phosphate + particular P (TOTP_P)   
+2) TotP is smaller or equal to phosphate     
+None are a lot off
+```{r}
+
+check_sums_p1(dat2, max_n = 1000)
+check_sums_p2(dat2)
+
+```
+
+### P, plot biggest discrepancy   
+-170%   
+
+```{r}
+
+nutrient_plot_p("VT71", 0)
+
+# Doesn't have TOTP_P:
+nutrient_plot_p("VR51", 0, nutrients = c("TOTP", "PO4-P"))
+
+```
+
+
+
+## 3. Nutrients, compare with values in Excel sheet  
+  
+- Compares mean values calculated from raw data with values in the "NIVAKlass" excel sheets  
+- Also see the sheet 'VT71_stats' in the AqM excel file that we read in section 11  
+  
+### Nutrients, get mean values from raw data   
+- Compare with vallues used in NIVAclass excel sheets here:  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`    
+- VT71: Results not equal to the numbers used for VT71, but so close that none of them change class  
+- VR51: Got exactly same numbers as those used
+### Plot surface values for each depth/station over time  
+```{r, fig.width = 8, fig.height = 5.5}
+
+# order_as_excel <- c("VT71", "VR51")
+
+plotdata <- dat2
+nrow(plotdata)
+
+depths <- c(0, 0.5, 5, 10)
+vars <- c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N")
+stations <- unique(plotdata$StationCode)
+
+years <- 2017:2019
+months <- list(c(6,7,8), c(1,2,12))
+names(months) <- c("Summer", "Winter")
+
+for (station in stations){
+  for (i in seq_along(months)){
+    df <- plotdata %>%
+      mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
+      mutate(Depth1 = factor(Depth1)) %>%
+      filter(Variable %in% vars & 
+               Depth1 %in% depths &
+               month(Time) %in% months[[i]] & 
+               year(Time) %in% years &
+               StationCode %in% station)
+    gg <- ggplot(df, aes(Time, Value, color = Depth1)) +
+      geom_point() +
+      geom_line() +
+      facet_wrap(vars(Variable), scales = "free_y") + 
+      labs(title = paste0(station, ", ", 
+                         names(months)[[i]])) +
+      scale_x_datetime(breaks = "1 year", date_labels = "%d.%m.%y") +
+      theme(axis.text.x = element_text(hjust = 0, angle = -45))
+    print(gg)
+  }
+}
+
+
+```
+
+### Plot weighted surface values over time   
+- 4 plots, one per station and season
+- Note extremely high ammonium value in VR51 winter (see section "Seasonal mean values)  
+```{r, fig.width = 8, fig.height = 5.5}
+
+# Delete two extremely high ammonium values 
+nrow(dat2)
+sel <- with(dat2,
+            StationCode == "VR51" & 
+              Variable %in% "NH4-N" &
+              month(Time) == 2 &
+              Value > 80)
+sum(sel)
+
+plotdata <- dat2[!sel,]
+nrow(plotdata)
+
+
+# order_as_excel <- c("VT71", "VR51")
+
+months <- list(c(6,7,8), c(1,2,12))
+names(months) <- c("Summer", "Winter")
+
+for (i in seq_along(months)){
+  df <- NIVAklass_get_mean_overdepth(
+    years = 2017:2019,
+    data = plotdata,
+    vars = c("TOTP", "PO4-P", "TOTN", "NO3+NO2-N", "NH4-N"),
+    months = months[[i]])
+  gg <- ggplot(df, aes(Time, Value, color = StationCode)) +
+    geom_point() +
+    geom_line() +
+    facet_wrap(vars(Variable), scales = "free_y") + 
+    labs(title = names(months)[[i]]) +
+    scale_x_datetime(breaks = "1 year", date_labels = "%d.%m.%y") +
+    theme(axis.text.x = element_text(hjust = 0, angle = -45))
+  print(gg)
+}
+
+```
+
+### Seasonal mean values  
+- Compare with vallues used in NIVAclass excel sheets here:  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`    
+- VT71: Results not equal to the numbers used for VT71, but so close that none of them change class  
+- VR51: Very samll difference between weighted and unweighted means. Got exactly same numbers as those used if we used equal weights for 0,5 and 10 meters.   
+- VR51, ammonium in winter: before deleting 2 very high February values, we have unweighted mean = 49.09, in Excel 23.63. After deleting, they are quite close.  
+```{r}
+#
+# Weights = 0.25,0.5,0.25 for 0,5 and 10 meters
+#
+df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, plotdata)
+
+df_mean_nutrients %>%
+  arrange(StationCode, Season) %>%
+  knitr::kable()
+
+#
+# Weights = same for 0,5 and 10 meters
+#
+df_mean_nutrients <- NIVAklass_nutrientvalues(2017:2019, plotdata, 
+                                              depths_weights = c(1,1,1))
+
+df_mean_nutrients %>%
+  arrange(StationCode, Season) %>%
+  knitr::kable()
+
+```
+
+## 4. Chl a quantiles    
+- VR51: Fairly big difference - 3.01 used in Excel, got 3.64 here   
+- VT71: Small difference - 1.78 used in Excel, got 1.72 here    
+```{r}
+
+NIVAklass_get_chl_data <- function(years, data, months = 2:10, depths = c(0,5,10)){
+  data %>%
+    mutate(Depth1 = ifelse(Depth1 == 0.5, 0, Depth1)) %>%
+    filter(Variable %in% "KlfA" & 
+             Depth1 %in% depths &
+             month(Time) %in% months & year(Time) %in% years) %>% 
+    select(StationCode, Time, Depth1, Variable, Value) %>%
+    pivot_wider(names_from = Depth1, values_from = Value, names_prefix = "Depth")  %>%
+    mutate(Max = pmax(Depth0, Depth5, Depth10, na.rm = TRUE))
+    }
+
+
+NIVAklass_plot_chl <- function(chldata){
+  chldata %>%
+    pivot_longer(c(Depth0, Depth5, Depth10, Max), names_to = "Depth", values_to = "KlfA") %>%
+    ggplot(aes(Time, KlfA, color = Depth)) +
+    geom_line() +
+    facet_wrap(vars(StationCode))
+}
+
+NIVAklass_get_chl_quantiles <- function(chldata){
+  chldata %>%
+    group_by(StationCode) %>%
+    summarise_at(c("Depth0", "Depth5", "Depth10", "Max"), 
+             quantile, probs = 0.9, na.rm = TRUE, type = 7)  # type = 7 correponds to PERCENTILE:INC in Excel
+                                                             # See part 6 above
+    }
+
+
+df <- NIVAklass_get_chl_data(2017:2019, dat2)
+
+# df
+NIVAklass_plot_chl(df)
+NIVAklass_get_chl_quantiles(df)
+
+
+```
+
+
+## 5. Bottom O2    
+- NOTE: Here we just check *CTD* values - the classification uses Winkler values from samples    
+- Couldnæt find the lab values (at least not for 2019)  
+  
+Code from script 13 '13_QA_CTD_2019.Rmd'     
+Remember that oxygen should be in ml/L! - See below   
+```{r}
+### Folders
+
+basefolder <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/"
+
+# Norskehavet Sør I
+folder1 <- "OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor"
+
+#
+# Get data frame with one line per data file
+#
+# 1. Find sheet names here: (can be commented out afterwards)
+# sheets_in_folder(folder1)                                 
+# 2. Enter the sheet names here:  
+fileinfo <- vars_in_folder(folder1, c("data","data","Data"))       
+
+#
+# Get data as list
+#
+datalist <- seq_len(nrow(fileinfo)) %>% map(read_data_fileno, df_fileinfo = fileinfo)
+
+#
+# Get data frame with one line per station
+# NOTE: Not actally needed
+#
+fileinfo_stations <- seq_len(nrow(fileinfo)) %>% map_df(get_stations)
+fileinfo_stations
+
+```
+
+### Check and combine all data   
+Remember that oxygen should be in ml/L!   
+```{r}
+
+# Check variable names of each dataset
+map(datalist, names)
+
+map(datalist, ~"StationCode" %in% names(.))   # note StationId instead of StationCode in 3rd file!
+
+# Check start of file of each dataset
+map(datalist, head)  
+
+# For file no 3, we want Oxygen__1! (oxygen in ml/L)
+#   (inspect 2nd row of Excel file)
+# So we delete the original Oksygen and make a new one
+datalist[[3]] <- datalist[[3]] %>%
+  select(-Oksygen) %>%
+  rename(Oksygen = Oksygen__1) %>%
+  rename(StationCode = StationId)    # Also remember this!
+
+# datalist[[3]] %>% filter(Depth1 == 200.5) %>% View("Data no 3")
+
+# Combine
+data_all <- bind_rows(datalist)
+
+data_all <- data_all %>%
+  filter(Oksygen > 0)
+
+# Check
+# data_all %>% filter(Depth1 == 200.5) %>% View("Data_all")
+
+```
+
+
+#### Data availability and max depth  
+```{r}
+
+for (station in c("VR51", "VT71")){
+  
+  dat <- data_all %>%
+    filter(StationCode %in% station)
+  
+  # Plot data availablity 1 - number of data with/without Oxygen
+  gg <- dat %>%
+    count(Date, Has_data = !is.na(Oksygen)) %>%
+    ggplot(aes(Date, n, color = Has_data)) + 
+    geom_vline(aes(xintercept = Date), color = "grey60") +
+    geom_point() +
+    labs(title = paste(station, "- number of data with/without oxygen"))
+  print(gg)
+  
+  # Plot data availablity 2 - max depth
+  gg <- dat %>%
+    filter(!is.na(Oksygen)) %>%
+    group_by(Date) %>%
+    summarise(Max_depth = max(Depth1)) %>%
+    ggplot(aes(Date, Max_depth)) + 
+    geom_vline(aes(xintercept = Date), color = "grey60")+
+    geom_point() +
+    labs(title = paste(station, "- max depth of oxygen data"))
+  print(gg)
+  
+}
+
+```
+
+#### Get oxygen at max depth    
+Also calculates 'Max_depth_perc' = Max depth that date as percent of max depth of that station
+```{r}
+# Get data from largest depth
+# 'Max_depth_perc'
+dat_bottom <- data_all %>%
+  filter(!is.na(Oksygen)) %>%
+  group_by(StationCode) %>%
+  mutate(Max_depth_station = max(Depth1)) %>%
+  group_by(StationCode, Date) %>%
+  mutate(Max_depth = max(Depth1),
+         Max_depth_perc = Max_depth/Max_depth_station*100) %>%
+  filter(Depth1 == Max_depth) # 230 is from plot above
+
+# Check 
+dat_bottom %>%
+  select(StationCode, Date, Oksygen, Max_depth, Max_depth_station, Max_depth_perc)
+
+# Keep only those where max depth is 85% of depth at station
+dat_bottom <- dat_bottom %>%
+  filter(Max_depth_perc > 85)
+
+```
+
+#### Get oxygen at oxygen minimum
+```{r}
+dat_o2min <- data_all %>%
+  filter(!is.na(Oksygen)) %>%
+  group_by(StationCode, Date) %>%
+  mutate(Min_O2 = min(Oksygen)) %>%
+  filter(Oksygen == Min_O2) %>% # select(Date, Oksygen, Depth1)
+  summarise(Oksygen = mean(Oksygen), 
+            Oksygenmetning = mean(Oksygenmetning), 
+            Depth1_min = min(Depth1),
+            Depth1_max = max(Depth1),
+            Depth1 = max(Depth1)
+            ) %>%
+  mutate(Depth_diff = Depth1_max - Depth1_min)
+
+# Check those where mn oxygen occurs over > 2 meter depth
+dat_o2min %>% 
+  filter(Depth_diff > 2) %>%
+  select(StationCode, Date, Oksygen, Depth1_min, Depth1_max)
+
+```
+
+#### Combine oxygen data  
+```{r}
+dat_oxygen <- bind_rows(
+  dat_bottom %>% 
+    select(StationCode, Date, Oksygen, Oksygenmetning, Depth1) %>% 
+    mutate(Position = "Bottom"),
+  dat_o2min %>% 
+    select(StationCode, Date, Oksygen, Oksygenmetning, Depth1) %>% 
+    mutate(Position = "O2-minimum")
+  ) %>%
+  ungroup()
+
+dat_oxygen
+
+```
+
+#### Plot time series   
+Shading for winter season (October - April)
+```{r}
+
+for (station in c("VR51", "VT71")){
+  gg1 <- plot_ts(
+    data = dat_oxygen %>% filter(StationCode %in% station), 
+    years = 2017:2019, 
+    y_variable = "Oksygen", category_variable = "Position", 
+    quality_type = "Concentration",
+    title = paste(station, "- oxygen concentration"))
+  gg2 <- plot_ts(
+    data = dat_oxygen %>% filter(StationCode %in% station), 
+    years = 2017:2019, 
+    category_variable = "Position",
+    y_variable = "Oksygenmetning", 
+    quality_type = "Saturation",
+    title = paste(station, "- oxygen saturation"))
+  print(gg1)
+  print(gg2)
+}
+
+
+```
+
+#### Make means  
+Mean for last 3 years = 3.844558    
+Mean for last 3 years, winer only = 3.641219   
+
+```{r, results = 'asis'}
+# Mean oxygen for all months
+dat_oxygen %>%
+  group_by(StationCode, Position) %>%
+  summarise(Oksygen = mean(Oksygen), 
+            Oksygenmetning = mean(Oksygenmetning)) %>%
+  knitr::kable(caption = "Mean oxygen for all months", digits = 2)
+
+# Mean oxygen for winter (Sept - April)
+dat_oxygen %>%
+  filter(month(Date) <= 4 | month(Date) >= 9) %>%
+  group_by(StationCode, Position) %>%
+  summarise(Oksygen = mean(Oksygen),
+            Oksygenmetning = mean(Oksygenmetning)) %>%
+  knitr::kable(caption = "Mean oxygen for winter (Sept - April)", digits = 2)
+
+```
+
