@@ -161,6 +161,8 @@ txt <- substr(x, 8, nchar(x))
 
 colnames.TF <- c("Vessel", "Date", "TimeOfDay", "Lat", "Lon", "X", txt[5:26])
 
+rm(x, txt)
+
 
 
 #
@@ -179,8 +181,8 @@ str <- gsub("\n", " ", str, fixed=TRUE)
 str <- gsub("[[:blank:]]+", " ", str)
 # Split string
 str_split <- strsplit(str, " ")[[1]]
-str_split
+# str_split
 txt <- substr(str_split, 8, nchar(str_split))
 colnames.FA <- c("Vessel", "Date", "TimeOfDay", "Lat", "Lon", "X", txt[5:29])
 
-
+rm(txt, str, str_split)
