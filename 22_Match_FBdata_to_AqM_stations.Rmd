@@ -5,12 +5,13 @@ date: "17 February 2020"
 output: 
   html_document:
     toc: true    
-    toc_flo: true
+    toc_float: true
   github_document:
     toc: true
+    
 knit: (function(inputFile, encoding) {
   rmarkdown::render(inputFile, encoding = encoding,
-  output_dir = "output", output_format = "all") })    
+  output_format = "all") })    
 
 ---
 
