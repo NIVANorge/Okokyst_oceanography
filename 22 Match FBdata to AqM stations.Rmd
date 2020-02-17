@@ -1,0 +1,611 @@
+---
+title: "22. Match FBdata to AqM stations"
+author: "DHJ"
+date: "17 February 2020"
+output: 
+  html_document:
+    toc: true    
+    toc_flo: true
+  github_document:
+    toc: true
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_dir = "output", output_format = "all") })    
+
+---
+
+Add Ferrybox data (Temp,Salt) to Aquamonitor sample data
+ 
+
+## 1. Libraries
+```{r, message=FALSE, warning=FALSE}
+
+library(plyr)      # used by functions in "Get_files_NIVA_ftp_server_functions.R" 
+library(dplyr)     # load AFTER plyr, so e,g, we use count() from dplyr
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+source("Get_files_NIVA_ftp_server_functions.R")
+
+# library(niRvana)
+#source("12_QA_2019_from_excel_functions.R")
+# RColorBrewer::display.brewer.all()
+```
+
+## 2. Data
+
+### Stations
+```{r}
+df_aqm_stations <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", 
+                              sheet = "StationPoint")
+
+```
+
+### Ferrybox sample data  
+```{r}
+
+df_fa <- readRDS("Datasett/21_df_ferrybox_sampledata_fa.rds")    
+df_tf <- readRDS("Datasett/21_df_ferrybox_sampledata_tf_stations.rds")  # has StationCode_closest
+
+```
+
+### Ferrybox: Add Date + Time    
+Already did this for Trollfjord (script 21)  
+```{r}
+df_fa <- df_fa %>% 
+  mutate(
+    x1 = as.character(SYSTEM_DATE_DMY),
+    x2 = as.character(SYSTEM_TIME) %>% substr(12,19),
+    Date = ymd(x1),
+    Time = ymd_hms(paste(x1, x2))) %>%   # select(x1, x2, Date, Time)
+  select(-x1, -x2, -SYSTEM_TIME, -SYSTEM_DATE_DMY) %>%
+  select(SHIP_CODE, Date, Time, everything())
+
+df_tf <- df_tf %>%
+  select(SHIP_CODE, Date, Time, everything())
+  
+
+```
+
+### Ferrybox: add StationCode  
+Corresponding numbers in Fantasy (AUTOMATIC_SAMPLE_COUNTER):    
+- VT4 = sample no 21-22  
+In Trollfjord, these are OFTEN but not always Corresponding numbers (SAMPLE_AUTO_NUM):    
+- VT4 = sample no 23-24    
+- VT72 = sample no 21-22     
+- VT23 = sample no 17-18    
+- VT80 = sample no 11-12  
+- VT45 = sample no 13-14  
+- VT22 = sample no 15-16   
+- VR25 = sample no 6-7   
+- VR23 = sample no 4-5  
+- VT76 = sample no 2-3  
+```{r}
+df_fa <- df_fa %>%
+  mutate(
+    StationCode = 
+      case_when(
+        AUTOMATIC_SAMPLE_COUNTER %in% 21:22 ~ "VT4"
+      ))
+
+# Just for interactive use (so one gets a blue little arrow in the envir. window) 
+# df_fa <- df_fa %>% filter(TRUE)      
+# df_tf <- df_tf %>% filter(TRUE)      
+
+```
+
+
+
+### Aquamonitor bottle data
+```{r}
+
+# DOC	  Fluo	  KlfA	NH4-N	NO3 	PO4-P	  Salt	SiO2	Temperatur	TOC	TOTN	TOTP	TSM	Turbiditet
+# mg/L C	?g/l	?g/l	?g/l	?g/l	?g/l		      mg/l	C	          mg/l ?g/l	?g/l	mg/l	FNU
+
+# sjekke filer i folder "Datasett"
+#dir("Datasett")
+
+df_aqm <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", sheet = "WaterChemistry")
+
+#lage datoobjekt
+df_aqm$Date <- as.Date (paste (df_aqm$Year, df_aqm$Month, df_aqm$Day, sep ="-"))
+
+str(df_aqm)
+summary(df_aqm)
+
+
+# no duplicates
+str (test <- distinct (df_aqm))
+
+#include only 2018 and 2019 data
+df_aqm <- subset(df_aqm, Date >= "2018-01-01" &  Date <= "2019-12-31")
+
+# StationCode seems to be correct for all rows
+#levels(as.factor (df_aqm$StationName))
+#levels(as.factor (df_aqm$StationCode))
+df_aqm$StationCode <- as.factor (df_aqm$StationCode)
+df_aqm$StationName <- as.factor (df_aqm$StationName)
+levels(df_aqm$StationCode)
+
+#order stations from south to north
+df_aqm$StationCode <- factor(df_aqm$StationCode, levels = c("VT4", "VT12", "VT72", "VT80", "VT45", "VT22", "VT23", "VT76", "VR23", "VR25"))
+
+# convert some columns read as chr to numeric
+df_aqm<- df_aqm %>% mutate(
+    KlfA = as.numeric(KlfA), NH4 = as.numeric(NH4), NO3_NO2 = as.numeric(NO3_NO2),  PO4 = as.numeric(PO4) 
+)
+
+# rounding
+# df_aqm <- df_aqm %>% 
+#   mutate_if(is.numeric, round, digits = 2)
+
+# look at missing values
+tb <- df_aqm %>% 
+  gather("Variable", Value, DOC:TOTP) %>%
+  filter(!is.na(Value)) %>%
+  xtabs(~StationCode + Variable, .)
+tb
+
+```
+
+### Converting DOC from mg C /l (NIVAlab) to umol C /Kg
+```{r}
+# https://ocean.ices.dk/Tools/UnitConversion.aspx
+#Conversions
+#??g/l = ??mol/l ? MW
+#g/l ??? g/kg ? 1.025
+
+# converting mg/l to ug/L
+DOC_ug <- df_aqm$DOC * 1000
+
+# converting ug/l to umol/L
+df_aqm$DOC_umolL <- DOC_ug / 12.01
+
+# converting umol/l to umol/kg
+df_aqm$DOC_umolKg <- df_aqm$DOC_umolL / 1.025
+
+```
+
+
+
+## 3. Ferrybox data - set StationCode 
+
+### Ferrybox: check StationCode  
+Plot the selected Trollfjord samples ('data') in blue +  
+the selected fixed stations ('station') in red
+```{r}
+library(mapview)
+library(sf)
+
+#
+# Plots the selected Trollfjord samples ('data') in blue +
+# the selected fixed stations ('station') in red
+#
+check_positions_tf <- function(data, station){
+  # FB points
+  df_points <- data %>%
+    # "copy" coordinates so the show up in popup
+    mutate(Lon = GPS_LON, Lat = GPS_LAT) %>%  
+    as.data.frame()   # read_excel makes a tibble, but you can't set row names for tibbles 
+  # Set rownames (shown at mouse hover) - must be unique
+  rownames(df_points) <- with(df_points, paste(SHIP_CODE, SAMPLE_AUTO_NUM, Time))
+  sf_points_tf <- st_as_sf(df_points,
+                           coords = c("GPS_LON", "GPS_LAT"),
+                           crs = "+proj=longlat +ellps=WGS84")
+
+  # Stations  
+  df_aqm_stations <- df_aqm_stations %>%
+    filter(StationCode == station) %>%
+    as.data.frame()
+  rownames(df_aqm_stations) <- df_aqm_stations$StationCode  
+  sf_points_stations <- st_as_sf(df_aqm_stations,
+                         coords = c("Longitude", "Latitude"),
+                         crs = "+proj=longlat +ellps=WGS84")
+
+  
+  mapview(sf_points_tf, alpha.regions = 0.2) + 
+    mapview(sf_points_stations, alpha.regions = 0.2, color = "red")
+
+}
+
+# Example
+df_tf %>% filter(StationCode_closest %in% "VT76" & Distance_closest < 20) %>% check_positions_tf("VT76")
+
+# Other examples
+if (FALSE){
+  df_tf %>% filter(StationCode_closest %in% "VT72" & Distance_closest < 10) %>% check_positions_tf("VT72")
+  df_tf %>% filter(StationCode_closest %in% "VT23" & Distance_closest < 8) %>% check_positions_tf("VT23")
+  df_tf %>% filter(StationCode_closest %in% "VT80" & Distance_closest < 20) %>% check_positions_tf("VT80")
+  df_tf %>% filter(StationCode_closest %in% "VT45" & Distance_closest < 20) %>% check_positions_tf("VT45")
+  df_tf %>% filter(StationCode_closest %in% "VT22" & Distance_closest < 20) %>% check_positions_tf("VT22")
+  # df_tf %>% filter(StationCode_closest %in% "VT25" & Distance_closest < 20) %>% check_positions_tf("VT25")
+}
+
+# Other examples II
+if (FALSE){
+  df_tf %>% 
+    filter(StationCode_closest %in% "VT76" & Distance_closest < 4) %>% 
+    filter(TRIP == 8488 & year(Date) == 2018) %>% 
+    check_positions_tf("VT76")
+  
+  df_tf %>% 
+    filter(StationCode_closest %in% "VT22" & Distance_closest < 4) %>% 
+    filter(TRIP == 8486 & year(Date) == 2018) %>% 
+    check_positions_tf("VT22")
+}
+
+
+
+```
+
+### Fix TRIP for Trollfjord  
+- The trip number (TRIP) is unreliable, it restarts quite often  
+- We make TRIP2 which actiually identifies each trip   
+```{r}
+# Fantasy - also looks bad
+# But we don't care now, seems to work
+# ggplot(df_fa, aes(x = Time, y = TRIP_NUMBER)) + geom_point()
+
+ggplot(df_tf, aes(x = Time, y = TRIP)) + geom_point()
+
+df_tf <- df_tf %>%
+  arrange(Time) %>%
+  ungroup() %>%
+  mutate(Restart = ifelse(TRIP < lag(TRIP), 1, 0))
+df_tf$Restart[1] <- 0
+df_tf$Trip_batch = cumsum(df_tf$Restart)
+df_tf <- df_tf %>%
+  mutate(TRIP2 = Trip_batch*10000 + TRIP) %>%
+  select(-Restart, -Trip_batch)
+# df_tf %>% select(TRIP, Restart, Trip_batch)
+
+ggplot(df_tf, aes(x = Time, y = TRIP2)) + geom_point()
+
+```
+
+
+### Set StationCode for Trollfjord  
+```{r}
+
+df_tf <- df_tf %>%
+  mutate(
+    StationCode = 
+      case_when(
+        SAMPLE_AUTO_NUM == 0 ~ as.character(NA),
+        StationCode_closest %in% "VT72" & Distance_closest < 10 ~ "VT72",
+        StationCode_closest %in% "VT23" & Distance_closest <  8 ~ "VT23",
+        StationCode_closest %in% "VT80" & Distance_closest < 20 ~ "VT80",
+        StationCode_closest %in% "VT45" & Distance_closest < 20 ~ "VT45",
+        StationCode_closest %in% "VT22" & Distance_closest < 4 ~ "VT22",
+        StationCode_closest %in% "VT76" & Distance_closest < 4 ~ "VT76"
+      )) %>%
+  mutate(Year = year(Date)) %>%
+  group_by(Year, StationCode, TRIP2) %>%
+  mutate(Date_range = diff(range(Date)), 
+         Time_range = diff(range(Time)),
+         n = n()) %>%
+  ungroup() %>%
+  # Remove StationCode for a single øine of a single station (from plot in next chunk)
+  # This had ~4 hours from measurement 2 to 3
+  mutate(StationCode = 
+           case_when(
+             StationCode %in% "VT22" & TRIP2 %in% 8486 & Time_range > 5000 ~ as.character(NA),
+             TRUE ~ StationCode))
+
+
+```
+
+### Time range   
+In days and in seconds    
+```{r}
+#
+# Check Date_range - only zero *thumbs up*
+# 
+df_tf %>% filter(!is.na(StationCode)) %>% xtabs(~Date_range, .)
+ 
+# 
+df_tf %>% 
+  filter(!is.na(StationCode)) %>% 
+  ggplot(aes(Date, Time_range)) + geom_point()
+
+# Checked this one and removed one case - see "special case" in previous chunk
+# df_tf %>%
+#   filter(StationCode %in% "VT22" & TRIP2 ==	8486)
+
+```
+
+
+### Check StationCode for Trollfjord
+```{r}
+
+if (FALSE){
+  df_tf %>%
+    xtabs(~paste(year(Date), TRIP) + addNA(StationCode), .)
+}
+
+if (FALSE){
+  df_tf %>%
+    filter(paste(year(Date), TRIP) == "2018 8488" & StationCode == "VT76")
+  df_tf %>%
+    filter(paste(year(Date), TRIP) == "2018 8486" & StationCode == "VT22")
+}
+```
+
+
+
+## 4. Aggregate ferrybox data to samples and add StationCode   
+
+### Aggregation  
+```{r}
+
+span <- function(x, na.rm = TRUE) diff(range(as.numeric(x), na.rm = na.rm))
+
+df_tf_agg <- df_tf %>%
+  rename(
+    FB_Lon = GPS_LON,
+    FB_Lat = GPS_LAT,
+    FB_Temp = TEMP_INLET,
+    FB_Salt = SAL_CTD,
+    FB_Trip = TRIP2) %>%
+  group_by(StationCode, FB_Trip) %>%
+  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt), 
+               list(mean=mean, range=span), 
+               na.rm = TRUE) %>%
+  filter(!is.na(StationCode))
+
+df_fa_agg <- df_fa %>%
+  mutate(Ferrybox = "fantasy") %>%
+  rename(
+    FB_Lon = GPS_LONGITUDE,
+    FB_Lat = GPS_LATITUDE,
+    FB_Temp = INLET_TEMPERATURE,
+    FB_Salt = CTD_SALINITY,
+    FB_Trip = TRIP_NUMBER) %>%
+  group_by(StationCode, FB_Trip) %>%
+  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt), 
+               list(mean=mean, range=span), 
+               na.rm = TRUE) %>%
+  filter(!is.na(StationCode)) %>%
+  mutate()
+
+df_ferrybox <- bind_rows(
+  df_tf_agg %>% mutate(Ferrybox = "trollfjord"),
+  df_fa_agg %>% mutate(Ferrybox = "fantasy")
+)
+
+```
+
+
+### Check Date_range  
+If OK (it is), we replace the names Date_mean, Time_man with Date, Time    
+```{r}
+
+# Date range
+table(df_ferrybox$Date_range)
+# ggplot(df_ferrybox, aes(Date_mean, Date_range, color = Ferrybox)) + geom_point()
+
+# Time range
+ggplot(df_ferrybox, aes(Date_mean, Time_range, color = Ferrybox)) + geom_point()
+
+#
+# Rename these columns
+#
+df_ferrybox <- df_ferrybox %>%
+  rename(Date = Date_mean,
+         Time = Time_mean)
+
+```
+
+### Check position range   
+Always small  
+```{r}
+
+ggplot(df_ferrybox, aes(Date, FB_Lon_range, color = Ferrybox)) + geom_point()
+ggplot(df_ferrybox, aes(Date, FB_Lat_range, color = Ferrybox)) + geom_point()
+
+```
+
+
+## 5. Station positions and dates   
+Make "df_station_date"  
+```{r}
+
+df_station_pos <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", sheet = "StationPoint")
+
+df_station_pos$StationCode <- factor(df_station_pos$StationCode, 
+                                     levels = c("VT4", "VT12", "VT72", "VT80", "VT45", "VT22", 
+                                                "VT23", "VT76", "VR23", "VR25"))
+
+# table(addNA(df_station_pos$StationCode))
+
+my_map <- map_data("world", "Norway")
+
+ggplot(df_station_pos, aes(x = Longitude, y = Latitude)) +
+  geom_text(aes(label = StationCode)) +
+  annotation_map(my_map, fill = NA, color = "blue") + 
+  labs(title = "Stations")
+
+df_station_pos <- df_station_pos %>%
+  mutate(Ferrybox = ifelse(StationCode %in% "VT4", "fantasy", "trollfjord"))
+
+# One line per station/date combination in data
+df_station_date <- df_aqm %>%
+  count(StationCode, Date) %>%
+  left_join(subset(df_station_pos, select = c(StationCode, Latitude, Longitude, Ferrybox)),
+            by = "StationCode")
+
+# df_station_date
+# df_station_date %>% arrange(Date, StationCode)
+
+ggplot(df_station_date, aes(Date, StationCode, color = Ferrybox)) +
+  geom_point() +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of bottle data")
+
+ggplot(df_tf %>% filter(SAMPLE_AUTO_NUM > 0), 
+       aes(Date, SAMPLE_AUTO_NUM, color = SHIP_CODE)) +
+  geom_point() +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of all ferrybox 'sample' data")
+
+ggplot(df_tf_agg, aes(Date_mean, StationCode)) +
+  geom_point() +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of bottle data") +
+  labs(title = "Stations/dates of Trollfjord ferrybox 'sample' data linked to stations")
+
+
+```
+
+
+### Check samples for example months, Trollfjord  
+- Bottle data = red points    
+- Ferrybox data = open circles  
+```{r}
+
+year <- 2018
+
+for (month in 4:8){
+  gg <- ggplot(df_station_date %>% 
+                 filter(year(Date) == 2018 & month(Date) == month & Ferrybox == "trollfjord"), 
+               aes(Date, StationCode)) +
+    # Bottle data = red points:
+    geom_point(color = "red") +
+    # Ferrybox data = open circles:
+    geom_point(data = df_ferrybox %>% 
+                 filter(year(Date) == 2018 & month(Date) == month & Ferrybox == "trollfjord"),
+               shape = 1, size = 3) +
+    # Show the entire month:
+    scale_x_date(limits = ymd(c(paste0("2018-", month, "-01"),
+                                paste0("2018-", month + 1, "-01")
+                                ))
+    )
+  print(gg)
+}
+
+
+```
+
+### Check samples for example months, Fantasy  
+- Bottle data = red points    
+- Ferrybox data = open circles  
+```{r}
+
+year <- 2018
+month <- 1:12
+gg <- ggplot(df_station_date %>% 
+               filter(year(Date) == 2018 & month(Date) %in% month & Ferrybox == "fantasy"), 
+             aes(Date, StationCode)) +
+  # Bottle data = red points
+  geom_point(color = "red") +
+  # Ferrybox data = open circles
+  geom_point(data = df_ferrybox %>% 
+               filter(year(Date) == 2018 & month(Date) %in% month & Ferrybox == "fantasy"),
+             shape = 1, size = 3)
+
+
+```
+
+## 6. Add ferrybox data to Aquamonitor bottle data  
+### Function for getting Ferrybox time closest to the given 'time'
+```{r}
+# Returns a data frame
+get_closest_day <- function(date, station, vessel, ferryboxdata){
+  ferryboxdata %>%
+    filter(StationCode %in% station & Ferrybox %in% vessel) %>%
+    mutate(Days_diff = (Date - date)/ddays(1)) %>%                     # difference in number of days
+    filter(abs(Days_diff) %in% min(abs(Days_diff), na.rm = TRUE)) %>%  # get the smallest difference
+    rename(FB_Date = Date) %>%  # To avoid confusion
+    mutate(Bottle_date = date)
+    }
+
+# Test
+# get_closest_day(ymd("2018-08-28"), "VT22", "trollfjord", df_ferrybox)
+# get_closest_day(ymd("2018-01-01"), "VT22", "trollfjord", df_ferrybox)
+
+```
+
+
+### Get ferrybox data for each of the stations/dates in bottle data   
+```{r}
+
+data_for_join <- df_station_date %>%
+  count(Date, StationCode, Ferrybox) %>%
+  select(-n) %>%
+  as.list() %>% 
+  purrr::pmap_dfr(~get_closest_day(..1, ..2, ..3, df_ferrybox))
+
+head(data_for_join)
+
+```
+
+### Check difference in days between bottle and ferrybox sample    
+Either 0 days difference, or at least 14    
+- That means we can just keep the 0 day difference data  
+```{r}
+
+ggplot(data_for_join, aes(Days_diff)) + geom_histogram(binwidth = 1)
+
+# xtabs(~Days_diff , data_for_join)
+
+```
+
+### Add to bottle data  
+```{r}
+# names(data_for_join)
+# names(df_aqm)
+
+# Prepare file for 
+data_for_join2 <- data_for_join %>%
+  filter(abs(Days_diff) <= 1) %>%    # we accpt one dday difference (all are zero in this case)
+  rename(FB_Time = Time,
+         FB_Lon = FB_Lon_mean,
+         FB_Lat = FB_Lat_mean,
+         FB_days_diff = Days_diff) %>%
+  select(-FB_Trip, -Date_range, -Time_range, -FB_Lon_range, -FB_Lat_range)
+
+if (!"FB_Temp_mean" %in% names(df_aqm)){
+  df_aqm <- df_aqm %>%
+    mutate(Ferrybox = ifelse(StationCode %in% "VT4", "fantasy", "trollfjord")) %>%
+    # Add all ferrybox data
+    left_join(data_for_join2, 
+              by = c("Ferrybox", "StationCode", "Date" = "Bottle_date"))
+}
+
+# Station sequence (along the coast)
+# table(addNA(df_aqm$StationCode))
+
+sts <- c("VT4", "VT12", "VT72", "VT23", "VT80", "VT45", "VT22", "VR25", "VR23", "VT76")
+# Check
+# unique(df_aqm$StationCode) %in% sts
+
+df_aqm <- df_aqm %>%
+  mutate(StationCode = factor(StationCode, levels = sts))
+
+```
+
+
+### Check  
+```{r}
+
+df_aqm %>%
+  mutate(`Has FB data` = ifelse(is.na(FB_Temp_mean), "No", "Yes")) %>%
+  ggplot(aes(Date, StationCode, color = `Has FB data`)) +
+  geom_point() +
+  scale_color_brewer(palette = "Set1") +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of bottle data") +
+  theme_minimal()
+
+```
+
+
+## Check ferrybox *log* data  
+```{r}
+
+```
+
