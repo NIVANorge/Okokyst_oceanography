@@ -1,12 +1,13 @@
 ---
 title: "Match ferrybox sample numbers to stations"
 author: "DHJ"
-date: "7 februar 2020"
+date: "17 februar 2020"
 output: 
   html_document:
     toc: true    
     toc_flo: true
   github_document:
+    html_preview: false
     toc: true
 knit: (function(inputFile, encoding) {
   rmarkdown::render(inputFile, encoding = encoding,
@@ -19,7 +20,7 @@ Find which sample numbers (in Ferrybox files) belongs to which stations
 Corresponding numbers in Fantasy:    
 - VT4 = sample no 21-22  
     
-Corresponding numbers in Trollfjord:    
+Often, but not always (!), corresponding numbers in Trollfjord:    
 - VT4 = sample no 23-24    
 - VT72 = sample no 21-22     
 - VT23 = sample no 17-18    
@@ -29,7 +30,14 @@ Corresponding numbers in Trollfjord:
 - VR25 = sample no 6-7   
 - VR23 = sample no 4-5  
 - VR76 = sample no 2-3  
-   
+For Trollfjord, we make a search for closest station as well (part 5 below)
+  
+Ferrybox sample files for 2018-2019 saved as  
+- "Datasett/21_df_ferrybox_sampledata_fa.rds"    
+- "Datasett/21_df_ferrybox_sampledata_tf.rds"  
+- "Datasett/Ferrybox_samples_OneDrive/FA_2018-19_automatic_samples.xlsx"   
+- "Datasett/Ferrybox_samples_OneDrive/TF_2018-19_automatic_samples.xlsx"   
+
 
 ## 1. Libraries
 ```{r}
@@ -42,6 +50,9 @@ library(lubridate)
 library(readxl)
 library(tidyr)
 library(RColorBrewer)
+# For mapping:
+library(mapview)
+library(sf)
 
 source("Get_files_NIVA_ftp_server_functions.R")
 
@@ -179,17 +190,17 @@ if (redownload_data){  # takes just a couple of minutes
   # d. Save
   #
   saveRDS(df_ferrybox_sampledata_2018_fa,
-          "Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+          "Datasett/21_df_ferrybox_sampledata_2018_fa.rds")
   saveRDS(df_ferrybox_sampledata_2018_tf,
-          "Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+          "Datasett/21_df_ferrybox_sampledata_2018_tf.rds")
   
   
 } else {
   
   df_ferrybox_sampledata_2018_fa <-
-    readRDS("Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+    readRDS("Datasett/21_df_ferrybox_sampledata_2018_fa.rds")
   df_ferrybox_sampledata_2018_tf <-
-    readRDS("Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+    readRDS("Datasett/21_df_ferrybox_sampledata_2018_tf.rds")
   
 }
 
@@ -206,8 +217,8 @@ if (redownload_data){  # takes just a couple of minutes
 # Fantasy
 #
 
-df_ferrybox_sampledata_2018_fa[1:7] %>% str()
-df_ferrybox_sampledata_2019_fa[1:7] %>% str()
+# df_ferrybox_sampledata_2018_fa[1:7] %>% str()
+# df_ferrybox_sampledata_2019_fa[1:7] %>% str()
 
 df_ferrybox_sampledata_2018_fa <- df_ferrybox_sampledata_2018_fa %>%
   mutate(SYSTEM_DATE_DMY = dmy_hms(paste(SYSTEM_DATE_DMY, "00:00:00")),
@@ -220,8 +231,8 @@ df_ferrybox_sampledata_fa <- bind_rows(
 #
 # Trollfjord
 #
-df_ferrybox_sampledata_2018_tf[1:7] %>% str()
-df_ferrybox_sampledata_2019_tf[1:7] %>% str()
+# df_ferrybox_sampledata_2018_tf[1:7] %>% str()
+# df_ferrybox_sampledata_2019_tf[1:7] %>% str()
 
 df_ferrybox_sampledata_2018_tf <- df_ferrybox_sampledata_2018_tf %>%
   mutate(SYSTEM_DATE = dmy_hms(paste(SYSTEM_DATE, "00:00:00")),
@@ -231,8 +242,8 @@ df_ferrybox_sampledata_tf <- bind_rows(
   df_ferrybox_sampledata_2018_tf,
   df_ferrybox_sampledata_2019_tf)
 
-names(df_ferrybox_sampledata_fa)
-names(df_ferrybox_sampledata_tf)
+# names(df_ferrybox_sampledata_fa)
+# names(df_ferrybox_sampledata_tf)
 
 # df_ferrybox_sampledata <- 
 #   bind_rows()
@@ -245,9 +256,9 @@ names(df_ferrybox_sampledata_tf)
 ```{r}
 
 saveRDS(df_ferrybox_sampledata_fa,
-        "Datasett/18_df_ferrybox_sampledata_fa.rds")
+        "Datasett/21_df_ferrybox_sampledata_fa.rds")
 saveRDS(df_ferrybox_sampledata_tf,
-        "Datasett/18_df_ferrybox_sampledata_tf.rds")
+        "Datasett/21_df_ferrybox_sampledata_tf.rds")
 
 openxlsx::write.xlsx(df_ferrybox_sampledata_fa,
                      "Datasett/Ferrybox_samples_OneDrive/FA_2018-19_automatic_samples.xlsx")
@@ -311,12 +322,31 @@ df_ferrybox_sampledata_tf %>%
 ## 4. Match automatic samples    
 Find which sample numbers (in Ferrybox files) belongs to which stations  
 
-
-### Check samples in map - prepare data    
+### Set time and direction for Trollfjord
 ```{r}
 
-library(mapview)
-library(sf)
+df_ferrybox_sampledata_tf <- df_ferrybox_sampledata_tf %>%
+  mutate(
+    x1 = as.character(SYSTEM_DATE),
+    x2 = as.character(SYSTEM_TIME) %>% substr(12,19),
+    Date = ymd(x1),
+    Time = ymd_hms(paste(x1, x2))) %>%   # select(x1, x2, Date, Time)
+  select(-x1, -x2, -SYSTEM_TIME, -SYSTEM_DATE) %>%
+  arrange(Time) %>%
+  mutate(
+    dhour = (as.numeric(Time) - lag(as.numeric(Time), order_by = Time))/3600,
+    dlat = GPS_LAT - lag(GPS_LAT, order_by = Time),
+    dlon = GPS_LON - lag(GPS_LON, order_by = Time),
+    ) %>%  #  elect(Date, Time, GPS_LAT, dhour, dlat)
+  select(SHIP_CODE, Date, Time, dhour, dlat, dlon, SAMPLE_AUTO_NUM, SAMPLE_MAN_NUM, TRIP, everything())
+
+```
+
+
+
+### Prepare ferrybox samples data for mapping    
+```{r}
+
 
 #
 # Fantasy (sf_points_fa)
@@ -352,7 +382,7 @@ df_points <- df_ferrybox_sampledata_tf %>%
 # Set rownames (shown at mouse hover) - must be unique
 rownames(df_points) <- with(df_points,
                             paste(SHIP_CODE, SAMPLE_AUTO_NUM, 
-                                  SYSTEM_DATE, SYSTEM_TIME))
+                                  Time))
 
 sf_points_tf <- st_as_sf(df_points,
                           coords = c("GPS_LON", "GPS_LAT"),
@@ -418,12 +448,222 @@ m_tf + mapview(sf_points_stations, color = "red")
 
 ```
 
+### Check specific Trollfjord sample number    
+- In contrast to Fantasy, there is a bit mess in Trollfjord's SAMPLE_AUTO_NUM  
+- They are all over  
+```{r}
+
+# Trollfjord
+mapview(sf_points_tf %>% filter(SAMPLE_AUTO_NUM == 13), alpha.regions = 0.2)
+
+#
+# Check Fantasy in contrast: sample 21 and 22 are always at the right place
+#
+if (FALSE){
+  mapview(sf_points_fa %>% filter(AUTOMATIC_SAMPLE_COUNTER == 21), alpha.regions = 0.2)
+  mapview(sf_points_fa %>% filter(AUTOMATIC_SAMPLE_COUNTER == 22), alpha.regions = 0.2)
+}
+
+```
+
+### Trollfjord: Get Ferrybox samples in the vicinity of specific lon, lat   
+Only for info, not used later   
+- For each station, shows SAMPLE_AUTO_NUM with number of data points in paranthesis 
+- Shows that we have a problem  
+- For some stations, all the closest SAMPLE_AUTO_NUM are two numbers (e.g. 13 and 14 for VT45)
+```{r}
+#
+# Pick trollfjord data from a given box around lon, lat
+#
+# tol_lon, tol_lat = tolerance in lon,lat direction
+#
+get_trollfjord_from_box <- function(lon, lat, tol_lon, tol_lat){
+  df_ferrybox_sampledata_tf %>%
+    filter(
+      GPS_LON >= (lon - tol_lon) &
+      GPS_LON <= (lon + tol_lon) &
+        GPS_LAT >= (lat - tol_lat) &
+        GPS_LAT <= (lat + tol_lat))
+}
+
+# df_aqm_stations %>%  filter(StationCode == "VT72")
+# Test
+# get_trollfjord_from_box(5.5877, 62.3066, 0.04, 0.04) %>% xtabs(~SAMPLE_AUTO_NUM, .)
+
+# Test
+# df <- with(df_aqm_stations %>%  filter(StationCode == "VT12"),
+#            get_trollfjord_from_box(Longitude, Latitude, 0.04, 0.04))
+
+#
+# 
+summarize_trollfjord_from_box <- function(...){
+  df <- get_trollfjord_from_box(...) %>%
+    filter(SAMPLE_AUTO_NUM > 0)
+  val <- xtabs(~SAMPLE_AUTO_NUM, df)
+  stat <- xtabs(~SAMPLE_AUTO_NUM, df) %>% names()
+  if (length(val > 0)){
+    result <- paste(stat, paste0("(", val, ")")) %>% paste(collapse = ", ")
+  } else {
+    result <- NA
+  }
+  result
+}
+# Test
+# summarize_trollfjord_from_box(5.5877, 62.3066, 0.04, 0.04)
+
+#
+# Add variable "TF_stations"
+#
+df_aqm_stations$TF_stations <- df_aqm_stations %>%
+  select(Longitude, Latitude) %>%
+  as.list() %>%
+  pmap_chr(~summarize_trollfjord_from_box(.x, .y, 0.08, 0.04))
+
+df_aqm_stations %>%
+  select(StationCode, TF_stations)
+
+```
+### Check VT80 + VT23 as example
+Only for info, not used later  
+```{r}
+df <- with(df_aqm_stations %>%  filter(StationCode == "VT80"),
+           get_trollfjord_from_box(Longitude, Latitude, 0.04, 0.04))
+
+# df %>% arrange(Time)
+
+df <- with(df_aqm_stations %>%  filter(StationCode == "VR23"),
+           get_trollfjord_from_box(Longitude, Latitude, 0.04, 0.04))
+
+# df %>% arrange(Time)
+
+```
+
+## 5. Trollfjord: Get closest station for each ferrybox data point
+
+### Make UTM coordinates   
+```{r}
+library(sp)
+crs_longlat <- "+proj=longlat +ellps=WGS84 +datum=WGS84"
+crs_utm <- "+proj=utm +zone=32 +ellps=WGS84 +datum=WGS84 +units=m"
+
+#
+# a. Add UTM coor to 'df_ferrybox_sampledata_tf'
+#
+SP <- SpatialPoints(df_ferrybox_sampledata_tf[,c("GPS_LON", "GPS_LAT")],
+         proj4string=CRS(crs_longlat)
+         )
+SP.UTM <- spTransform(SP, CRS(crs_utm))
+# Add transformed coords to data set
+df_ferrybox_sampledata_tf$UTM_x <- SP.UTM@coords[,1]
+df_ferrybox_sampledata_tf$UTM_y <- SP.UTM@coords[,2]
 
 
-## 5. Check positions of manual samples  
+#
+# b. Add UTM coor to 'df_aqm_stations'
+#
+SP <- SpatialPoints(df_aqm_stations[,c("Longitude", "Latitude")],
+         proj4string=CRS(crs_longlat)
+         )
+SP.UTM <- spTransform(SP, CRS(crs_utm))
+# Add transformed coords to data set
+df_aqm_stations$UTM_x <- SP.UTM@coords[,1]
+df_aqm_stations$UTM_y <- SP.UTM@coords[,2]
+
+plot(UTM_y ~ UTM_x, df_ferrybox_sampledata_tf)
+plot(UTM_y ~ UTM_x, df_aqm_stations)
+```
+
+### Function  
+```{r}
+#
+# Returns distance to give station (in km)
+#
+get_distance <- function(station, ferryboxdata){
+  df_station <- df_aqm_stations %>% filter(StationCode %in% station)
+  result <- ferryboxdata %>%
+    mutate(dx = (UTM_x - df_station$UTM_x[1])/1000,
+           dy = (UTM_y - df_station$UTM_y[1])/1000,
+           Dist = sqrt((dx^2) + (dy^2))
+    ) %>%
+    select(Dist)
+  names(result) <- station
+  result
+}
+# test
+# x <- get_distance("VT76", df_ferrybox_sampledata_tf)
+# range(x, na.rm = TRUE)
+```
+
+### Make distance matrix and find closest station    
+```{r}
+stations <- df_aqm_stations %>%
+  filter(StationCode != "VT4") %>%    # Skagerrak
+  pull(StationCode)
+
+distance_matrix <- stations %>% map_dfc(get_distance, ferryboxdata = df_ferrybox_sampledata_tf)
+
+# For test:
+# distance_matrix <- distance_matrix[1:4,]
+# distance_matrix
+
+distance_minimum <- data.frame(
+  Distance_closest = apply(distance_matrix, 1, min),
+  Stat_no = apply(distance_matrix, 1, which.min)
+)
+distance_minimum$StationCode_closest <- stations[distance_minimum$Stat_no]
+
+head(distance_minimum)
+
+if (!"StationCode_closest" %in% names(df_ferrybox_sampledata_tf)){
+  df_ferrybox_sampledata_tf <- bind_cols(
+    df_ferrybox_sampledata_tf,
+    distance_minimum %>% select(StationCode_closest, Distance_closest)
+    )
+}
+
+#
+# This was overkill:
+#
+# # Extra functions for second lowest number and index of second lowest number
+# min.second <- function(x) sort(x)[2]
+# which.min.second <- function(x) which(rank(x) == 2)[1]
+# # Test
+# # min.second(c(3,6,5,9))
+# # which.min.second(c(3,6,5,9))
+# 
+# distance_minimum <- data.frame(
+#   Distance1 = apply(distance_matrix, 1, min),
+#   Distance2 = apply(distance_matrix, 1, min.second),
+#   Stat_no1 = apply(distance_matrix, 1, which.min),
+#   Stat_no2 = apply(distance_matrix, 1, which.min.second)
+# )
+# distance_minimum$StationCode_min1 <- stations[distance_minimum$Stat_no1]
+# distance_minimum$StationCode_min2 <- stations[distance_minimum$Stat_no2]
+
+```
+
+### Save 'df_ferrybox_sampledata_tf'    
+```{r}
+
+saveRDS(df_ferrybox_sampledata_tf,
+        "Datasett/21_df_ferrybox_sampledata_tf_stations.rds")
+
+openxlsx::write.xlsx(df_ferrybox_sampledata_tf,
+                     "Datasett/Ferrybox_samples_OneDrive/TF_2018-19_automatic_samples_stations.xlsx")
+
+```
+
+
+
+## 6. Check positions of manual samples    
+Only for information  
 
 ### Check samples in map - prepare data    
 ```{r}
+
+# Reload the old one
+df_ferrybox_sampledata_tf <- readRDS("Datasett/21_df_ferrybox_sampledata_tf.rds")
+
 
 library(mapview)
 library(sf)
