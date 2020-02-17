@@ -40,8 +40,22 @@ DHJ
       - [Check difference in days between bottle and ferrybox
         sample](#check-difference-in-days-between-bottle-and-ferrybox-sample)
       - [Add to bottle data](#add-to-bottle-data)
+      - [Check coverage](#check-coverage)
+  - [7. Get data for Jan-March 2018](#get-data-for-jan-march-2018)
+      - [Find and map “station boxes”](#find-and-map-station-boxes)
+      - [Download ferrybox log data](#download-ferrybox-log-data)
+      - [Combine data](#combine-data)
+      - [Extract data per station per
+        day](#extract-data-per-station-per-day)
       - [Check](#check)
-  - [Check ferrybox *log* data](#check-ferrybox-log-data)
+      - [Data lacking FB data](#data-lacking-fb-data)
+      - [Add to bottle data](#add-to-bottle-data-1)
+      - [Check coverage of data to add](#check-coverage-of-data-to-add)
+      - [Replace rows in original data](#replace-rows-in-original-data)
+      - [Check updated coverage](#check-updated-coverage)
+      - [Update df\_aqm](#update-df_aqm)
+  - [8. Save](#save)
+  - [9. A couple of plots](#a-couple-of-plots)
 
 Add Ferrybox data (Temp,Salt) to Aquamonitor sample
 data
@@ -79,6 +93,8 @@ df_aqm_stations <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx
 ``` r
 df_fa <- readRDS("Datasett/21_df_ferrybox_sampledata_fa.rds")    
 df_tf <- readRDS("Datasett/21_df_ferrybox_sampledata_tf_stations.rds")  # has StationCode_closest
+
+# table(df_tf$StationCode_closest)
 ```
 
 ### Ferrybox: Add Date + Time
@@ -381,8 +397,11 @@ if (FALSE){
   df_tf %>% filter(StationCode_closest %in% "VT72" & Distance_closest < 10) %>% check_positions_tf("VT72")
   df_tf %>% filter(StationCode_closest %in% "VT23" & Distance_closest < 8) %>% check_positions_tf("VT23")
   df_tf %>% filter(StationCode_closest %in% "VT80" & Distance_closest < 20) %>% check_positions_tf("VT80")
-  df_tf %>% filter(StationCode_closest %in% "VT45" & Distance_closest < 20) %>% check_positions_tf("VT45")
-  df_tf %>% filter(StationCode_closest %in% "VT22" & Distance_closest < 20) %>% check_positions_tf("VT22")
+  df_tf %>% filter(StationCode_closest %in% "VT45" & Distance_closest < 8) %>% check_positions_tf("VT45")
+  df_tf %>% filter(StationCode_closest %in% "VT22" & Distance_closest < 8) %>% check_positions_tf("VT22")
+  df_tf %>% filter(StationCode_closest %in% "VT12" & Distance_closest < 8) %>% check_positions_tf("VT12")
+  df_tf %>% filter(StationCode_closest %in% "VR23" & Distance_closest < 8) %>% check_positions_tf("VR23")
+  df_tf %>% filter(StationCode_closest %in% "VR25" & Distance_closest < 8) %>% check_positions_tf("VR25")
   # df_tf %>% filter(StationCode_closest %in% "VT25" & Distance_closest < 20) %>% check_positions_tf("VT25")
 }
 
@@ -445,9 +464,12 @@ df_tf <- df_tf %>%
         StationCode_closest %in% "VT72" & Distance_closest < 10 ~ "VT72",
         StationCode_closest %in% "VT23" & Distance_closest <  8 ~ "VT23",
         StationCode_closest %in% "VT80" & Distance_closest < 20 ~ "VT80",
-        StationCode_closest %in% "VT45" & Distance_closest < 20 ~ "VT45",
+        StationCode_closest %in% "VT45" & Distance_closest < 8 ~ "VT45",
         StationCode_closest %in% "VT22" & Distance_closest < 4 ~ "VT22",
-        StationCode_closest %in% "VT76" & Distance_closest < 4 ~ "VT76"
+        StationCode_closest %in% "VT76" & Distance_closest < 4 ~ "VT76",
+        StationCode_closest %in% "VT12" & Distance_closest < 8 ~ "VT12",
+        StationCode_closest %in% "VR23" & Distance_closest < 8 ~ "VR23",
+        StationCode_closest %in% "VR25" & Distance_closest < 8 ~ "VR25"
       )) %>%
   mutate(Year = year(Date)) %>%
   group_by(Year, StationCode, TRIP2) %>%
@@ -476,7 +498,7 @@ df_tf %>% filter(!is.na(StationCode)) %>% xtabs(~Date_range, .)
 
     ## Date_range
     ##   0 
-    ## 254
+    ## 387
 
 ``` r
 # 
@@ -508,6 +530,8 @@ if (FALSE){
     filter(paste(year(Date), TRIP) == "2018 8488" & StationCode == "VT76")
   df_tf %>%
     filter(paste(year(Date), TRIP) == "2018 8486" & StationCode == "VT22")
+  df_tf %>%
+    filter(StationCode == "VT")
 }
 ```
 
@@ -516,6 +540,7 @@ if (FALSE){
 ### Aggregation
 
 ``` r
+# Define span = maximum - minimum
 span <- function(x, na.rm = TRUE) diff(range(as.numeric(x), na.rm = na.rm))
 
 df_tf_agg <- df_tf %>%
@@ -524,9 +549,15 @@ df_tf_agg <- df_tf %>%
     FB_Lat = GPS_LAT,
     FB_Temp = TEMP_INLET,
     FB_Salt = SAL_CTD,
+    FB_Chl = CHLA_FLU,
+    FB_Oxy_con = CONC_O2,
+    FB_Oxy_sat = SAT_O2,
+    FB_CDOM = YEL_FLU,    # hope this is correct interpretation
+    FB_Cyano = BG_FLU,    # hope this is the same
     FB_Trip = TRIP2) %>%
   group_by(StationCode, FB_Trip) %>%
-  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt), 
+  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt, 
+                    FB_Oxy_con, FB_Oxy_sat, FB_Chl, FB_CDOM, FB_Cyano), 
                list(mean=mean, range=span), 
                na.rm = TRUE) %>%
   filter(!is.na(StationCode))
@@ -538,13 +569,18 @@ df_fa_agg <- df_fa %>%
     FB_Lat = GPS_LATITUDE,
     FB_Temp = INLET_TEMPERATURE,
     FB_Salt = CTD_SALINITY,
+    FB_Chl = CHLA_FLUORESCENCE,
+    FB_Oxy_con = INLET_OXYGEN_CONCENTRATION,
+    FB_Oxy_sat = INLET_OXYGEN_SATURATION,
+    FB_CDOM = CDOM_FLUORESCENCE,
+    FB_Cyano = CYANO_FLUORESCENCE,
     FB_Trip = TRIP_NUMBER) %>%
   group_by(StationCode, FB_Trip) %>%
-  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt), 
+  summarise_at(vars(Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt, 
+                    FB_Oxy_con, FB_Oxy_sat, FB_Chl, FB_CDOM, FB_Cyano), 
                list(mean=mean, range=span), 
                na.rm = TRUE) %>%
-  filter(!is.na(StationCode)) %>%
-  mutate()
+  filter(!is.na(StationCode))
 
 df_ferrybox <- bind_rows(
   df_tf_agg %>% mutate(Ferrybox = "trollfjord"),
@@ -564,7 +600,7 @@ table(df_ferrybox$Date_range)
 
     ## 
     ##   0 
-    ## 174
+    ## 241
 
 ``` r
 # ggplot(df_ferrybox, aes(Date_mean, Date_range, color = Ferrybox)) + geom_point()
@@ -750,20 +786,23 @@ data_for_join <- df_station_date %>%
 head(data_for_join)
 ```
 
-    ## # A tibble: 6 x 17
+    ## # A tibble: 6 x 27
     ## # Groups:   StationCode [6]
     ##   StationCode FB_Trip FB_Date    Time                FB_Lon_mean FB_Lat_mean
     ##   <chr>         <dbl> <date>     <dttm>                    <dbl>       <dbl>
     ## 1 VT76           8486 2018-04-05 2018-04-05 12:40:03       30.1         69.8
-    ## 2 VT80           8486 2018-04-09 2018-04-09 01:26:42        9.33        63.8
-    ## 3 VT45           8486 2018-04-09 2018-04-09 02:38:23        9.77        63.6
-    ## 4 VT22           8488 2018-04-20 2018-04-20 04:04:53       10.4         63.4
-    ## 5 VT72           8486 2018-04-10 2018-04-10 01:03:40        5.58        62.3
-    ## 6 VT23           8486 2018-04-09 2018-04-09 11:27:10        8.87        63.5
-    ## # ... with 11 more variables: FB_Temp_mean <dbl>, FB_Salt_mean <dbl>,
-    ## #   Date_range <dbl>, Time_range <dbl>, FB_Lon_range <dbl>, FB_Lat_range <dbl>,
-    ## #   FB_Temp_range <dbl>, FB_Salt_range <dbl>, Ferrybox <chr>, Days_diff <dbl>,
-    ## #   Bottle_date <date>
+    ## 2 VR23           8486 2018-04-05 2018-04-05 15:43:41       31.0         70.5
+    ## 3 VR25           8486 2018-04-05 2018-04-05 21:17:08       28.8         71.0
+    ## 4 VT80           8486 2018-04-09 2018-04-09 01:26:42        9.33        63.8
+    ## 5 VT45           8486 2018-04-09 2018-04-09 02:38:23        9.77        63.6
+    ## 6 VT22           8488 2018-04-20 2018-04-20 04:04:53       10.4         63.4
+    ## # ... with 21 more variables: FB_Temp_mean <dbl>, FB_Salt_mean <dbl>,
+    ## #   FB_Oxy_con_mean <dbl>, FB_Oxy_sat_mean <dbl>, FB_Chl_mean <dbl>,
+    ## #   FB_CDOM_mean <dbl>, FB_Cyano_mean <dbl>, Date_range <dbl>,
+    ## #   Time_range <dbl>, FB_Lon_range <dbl>, FB_Lat_range <dbl>,
+    ## #   FB_Temp_range <dbl>, FB_Salt_range <dbl>, FB_Oxy_con_range <dbl>,
+    ## #   FB_Oxy_sat_range <dbl>, FB_Chl_range <dbl>, FB_CDOM_range <dbl>,
+    ## #   FB_Cyano_range <dbl>, Ferrybox <chr>, Days_diff <dbl>, Bottle_date <date>
 
 ### Check difference in days between bottle and ferrybox sample
 
@@ -820,7 +859,7 @@ df_aqm <- df_aqm %>%
   mutate(StationCode = factor(StationCode, levels = sts))
 ```
 
-### Check
+### Check coverage
 
 ``` r
 df_aqm %>%
@@ -835,4 +874,426 @@ df_aqm %>%
 
 ![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-23-1.png)<!-- -->
 
-## Check ferrybox *log* data
+## 7\. Get data for Jan-March 2018
+
+### Find and map “station boxes”
+
+  - Note: df\_station\_boxes also contain hour ranges
+
+<!-- end list -->
+
+``` r
+df_station_boxes <- df_tf %>%
+  filter(!is.na(StationCode)) %>%
+  mutate(Hour = hour(Time)) %>%
+  group_by(StationCode) %>%
+  summarise_at(vars(GPS_LON, GPS_LAT, Hour), list(min=min, max=max), na.rm = TRUE)
+
+df <- as.data.frame(df_station_boxes)
+
+library(leaflet)
+leaflet() %>% addTiles() %>%
+  addRectangles(
+    lng1 = df$GPS_LON_min, lat1 = df$GPS_LAT_min,
+    lng2 = df$GPS_LON_max, lat2 = df$GPS_LAT_max,
+    fillColor = "transparent"
+  )
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-24-1.png)<!-- -->
+
+### Download ferrybox log data
+
+Since samples data isn’t available for early 2018
+
+``` r
+# redownload_data <- TRUE
+redownload_data <- FALSE  # if FALSE, we just read the saved data
+
+if (redownload_data){  # takes just a couple of minutes
+
+    #
+  # Fantasy
+  #
+  
+  # Get file names of all log files for that vessel
+  logfiles_fn <- get_filenames_logfiles("fantasy")
+  
+  # Check
+  # tail(logfiles_fn)
+  
+  # Combine with dates 
+  df_logfilenames_fa_2018 <- data.frame(
+    filename = logfiles_fn,
+    Date = ymd(substr(logfiles_fn, 5, 12)), # "5,12" for 'log' files, "9,16" for sample files
+    stringsAsFactors = FALSE) %>%
+    filter(year(Date) %in% 2018:2019)
+
+  #
+  # Trollfjord
+  #
+  
+  # Get file names of all log files for that vessel
+  logfiles_fn <- get_filenames_logfiles("trollfjord")
+  
+  # Check
+  # tail(logfiles_fn)
+  
+  # Combine with dates 
+  df_logfilenames_tf_2018 <- data.frame(
+    filename = logfiles_fn,
+    Date = ymd(substr(logfiles_fn, 5, 12)), # "5,12" for 'log' files, "9,16" for sample files
+    stringsAsFactors = FALSE) %>%
+    filter(year(Date) %in% 2018:2019)
+  
+  #
+  # b. Combine filenames  
+  #
+  
+  df_logfilenames_2018 <- 
+    bind_rows(
+      df_logfilenames_fa_2018 %>% mutate(Ferrybox = "fantasy"),
+      df_logfilenames_tf_2018 %>% mutate(Ferrybox = "trollfjord")
+    )
+  
+  #
+  # c. Download log file data
+  #
+  # pick only Jan-March 2018 + Nov-Dec 2019
+  filenames <- subset(df_logfilenames_fa_2018, Date < ymd("2018-04-01") | Date > ymd("2019-11-01"))$filename
+  df_ferrybox_logdata_2018_fa <- get_several_logfiles(
+    filenames,   
+    vessel = "fantasy",
+    trace = FALSE)
+  
+  # pick only Jan-March 2018 + Nov-Dec 2019
+  filenames <- subset(df_logfilenames_tf_2018, Date < ymd("2018-04-01") | Date > ymd("2019-11-01"))$filename
+  df_ferrybox_logdata_2018_tf <- get_several_logfiles(
+    filenames,    
+    vessel = "trollfjord",
+    trace = FALSE)
+  
+  # dim(df_ferrybox_logdata_2018_fa)
+  # dim(df_ferrybox_logdata_2018_tf)
+  names(df_ferrybox_logdata_2018_fa) <- names(df_fa)[1:33]
+  names(df_ferrybox_logdata_2018_tf) <- names(readRDS("Datasett/21_df_ferrybox_sampledata_tf.rds"))
+
+  #
+  # d. Save
+  #
+  saveRDS(df_ferrybox_logdata_2018_fa,
+          "Datasett/22_df_ferrybox_logdata_2018_fa.rds")
+  saveRDS(df_ferrybox_logdata_2018_tf,
+          "Datasett/22_df_ferrybox_logdata_2018_tf.rds")
+  
+} else {
+
+  df_ferrybox_logdata_2018_fa <- readRDS("Datasett/22_df_ferrybox_logdata_2018_fa.rds")
+  df_ferrybox_logdata_2018_tf <- readRDS("Datasett/22_df_ferrybox_logdata_2018_tf.rds")
+  
+}
+```
+
+### Combine data
+
+``` r
+df_log_fa <- df_ferrybox_logdata_2018_fa %>%
+  mutate(
+    x1 = as.character(Date),
+    x2 = as.character(Time),
+    Date = dmy(x1),
+    Time = dmy_hms(paste(x1, x2))) %>%   # select(x1, x2, Date, Time)
+  select(-x1, -x2) %>%
+  mutate(Ferrybox = "fantasy") %>%
+  rename(
+    FB_Lon = GPS_LONGITUDE,
+    FB_Lat = GPS_LATITUDE,
+    FB_Temp = INLET_TEMPERATURE,
+    FB_Salt = CTD_SALINITY,
+    FB_Chl = CHLA_FLUORESCENCE,
+    FB_Oxy_con = INLET_OXYGEN_CONCENTRATION,
+    FB_Oxy_sat = INLET_OXYGEN_SATURATION,
+    FB_CDOM = CDOM_FLUORESCENCE,
+    FB_Cyano = CYANO_FLUORESCENCE,
+    FB_Trip = TRIP_NUMBER)
+
+df_log_tf <- df_ferrybox_logdata_2018_tf %>%
+  mutate(
+    x1 = as.character(SYSTEM_DATE),
+    x2 = as.character(SYSTEM_TIME),
+    Date = dmy(x1),
+    Time = dmy_hms(paste(x1, x2))) %>%  # select(x1, x2, Date, Time)
+  select(-x1, -x2, -SYSTEM_TIME, -SYSTEM_DATE) %>%
+  mutate(Ferrybox = "trollfjord") %>%
+  rename(
+    FB_Lon = GPS_LON,
+    FB_Lat = GPS_LAT,
+    FB_Temp = TEMP_INLET,
+    FB_Salt = SAL_CTD,
+    FB_Chl = CHLA_FLU,
+    FB_Oxy_con = CONC_O2,
+    FB_Oxy_sat = SAT_O2,
+    FB_CDOM = YEL_FLU,    # hope this is correct interpretation
+    FB_Cyano = BG_FLU,    # hope this is the same
+    FB_Trip = TRIP)
+
+df_log <- bind_rows(df_log_fa, df_log_tf) %>%
+  select(Ferrybox, Date, Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt, 
+         FB_Oxy_con, FB_Oxy_sat, FB_Chl, FB_CDOM, FB_Cyano)
+```
+
+### Extract data per station per day
+
+``` r
+extract_by_spatial_box <- function(station, data, data_box){
+  df <- data_box %>% filter(StationCode %in% station)
+  data %>%
+    mutate(Hour = hour(Time)) %>%
+    filter(
+      FB_Lon >= df$GPS_LON_min[1] &
+        FB_Lon <= df$GPS_LON_max[1] &
+        FB_Lat >= df$GPS_LAT_min[1] &
+        FB_Lat <= df$GPS_LAT_max[1] &
+        Hour >= df$Hour_min[1] &
+        Hour <= df$Hour_max[1],)
+  }
+# Test
+# extract_by_spatial_box("VT80", df_log, df_station_boxes)
+
+sts <- df_station_boxes$StationCode 
+names(sts) <- sts
+
+# Get raw data from each station
+df_log_station_raw <- sts %>% 
+  map_dfr(extract_by_spatial_box, data = df_log, data_box = df_station_boxes,
+           .id = "StationCode")
+
+# Summarise data per station/day 
+# Still all data - no selection by bottle sample date
+df_log_station <- df_log_station_raw %>%
+  group_by(Ferrybox, StationCode, Date) %>%
+  summarise_at(vars(Time, FB_Lon, FB_Lat, FB_Temp, FB_Salt, 
+                    FB_Oxy_con, FB_Oxy_sat, FB_Chl, FB_CDOM, FB_Cyano), 
+               list(mean=mean, range=span), 
+               na.rm = TRUE) %>%
+  filter(!is.na(StationCode))
+
+# Plot time ramge (seconds) of FB data within each station/date  
+ggplot(df_log_station, aes(Time_range)) + geom_histogram()
+```
+
+    ## `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-27-1.png)<!-- -->
+
+``` r
+df_log_station <- df_log_station %>%
+  rename(Time = Time_mean)
+```
+
+### Check
+
+``` r
+df_log_station %>%
+  ggplot(aes(Date, StationCode)) +
+  geom_point() +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 48), color = "grey60") +
+  labs(title = "Stations/dates of all ferrybox data") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-28-1.png)<!-- -->
+
+### Data lacking FB data
+
+``` r
+# Data lacking FB data
+df_station_days_lacking_fbdata <- df_aqm %>%
+  filter(is.na(FB_Temp_mean)) %>%
+  mutate(Ferrybox = ifelse(StationCode %in% "VT4", "fantasy", "trollfjord")) %>%
+  count(Date, StationCode, Ferrybox)
+
+# df_station_days_lacking_fbdata
+
+# Test get_closest_day()
+# get_closest_day(ymd("2018-01-19"), "VR25", "trollfjord", df_log_station)
+
+data_for_join <- df_station_days_lacking_fbdata %>%
+  select(-n) %>%
+  as.list() %>% 
+  purrr::pmap_dfr(~get_closest_day(..1, ..2, ..3, df_log_station))
+
+# head(data_for_join)
+
+table(data_for_join$Days_diff)
+```
+
+    ## 
+    ## -586 -584 -583 -209 -127   -1    0 
+    ##    4    1    1    1    1    4   23
+
+``` r
+names(df_aqm)
+```
+
+    ##  [1] "ProjectId"        "ProjectName"      "StationId"        "StationCode"     
+    ##  [5] "StationName"      "Day"              "Month"            "Year"            
+    ##  [9] "Time"             "Depth1"           "Depth2"           "DOC"             
+    ## [13] "Fluorescens"      "KlfA"             "NH4"              "NO3_NO2"         
+    ## [17] "PO4"              "Salt"             "SiO2"             "Temp"            
+    ## [21] "TOTN"             "TOTP"             "Date"             "DOC_umolL"       
+    ## [25] "DOC_umolKg"       "Ferrybox"         "FB_Date"          "FB_Time"         
+    ## [29] "FB_Lon"           "FB_Lat"           "FB_Temp_mean"     "FB_Salt_mean"    
+    ## [33] "FB_Oxy_con_mean"  "FB_Oxy_sat_mean"  "FB_Chl_mean"      "FB_CDOM_mean"    
+    ## [37] "FB_Cyano_mean"    "FB_Temp_range"    "FB_Salt_range"    "FB_Oxy_con_range"
+    ## [41] "FB_Oxy_sat_range" "FB_Chl_range"     "FB_CDOM_range"    "FB_Cyano_range"  
+    ## [45] "FB_days_diff"
+
+### Add to bottle data
+
+``` r
+# names(data_for_join)
+# names(df_aqm)
+
+# Prepare file for 
+data_for_join2 <- data_for_join %>%
+  filter(abs(Days_diff) <= 1) %>%    # we accpt one dday difference (all are zero in this case)
+  rename(FB_Time = Time,
+         FB_Lon = FB_Lon_mean,
+         FB_Lat = FB_Lat_mean,
+         FB_days_diff = Days_diff) %>%
+  select(-Time_range, -FB_Lon_range, -FB_Lat_range)
+
+# The bottle data (selectied rows) that we need to update
+df_aqm_rows_to_update <- df_aqm %>%
+  filter(is.na(FB_Temp_mean)) %>%
+  select(-(FB_Date:FB_days_diff)) %>%
+  mutate(Ferrybox = ifelse(StationCode %in% "VT4", "fantasy", "trollfjord"))
+
+# Check
+# df_aqm_rows_to_update %>% select(Ferrybox, Date, StationCode)
+# data_for_join2 %>% select(Ferrybox, Bottle_date, StationCode)
+
+if (!"FB_Temp_mean" %in% names(df_aqm_rows_to_update)){
+  df_aqm_rows_to_update <- df_aqm_rows_to_update %>%
+    # Add all ferrybox data
+    left_join(data_for_join2, 
+              by = c("Ferrybox", "StationCode", "Date" = "Bottle_date"))
+}
+```
+
+    ## Warning: Column `StationCode` joining factor and character vector, coercing into
+    ## character vector
+
+``` r
+# Check
+# df_aqm_rows_to_update %>% select(Ferrybox, Date, StationCode, FB_Temp_mean)
+
+# Station sequence (along the coast)
+# table(addNA(df_aqm$StationCode))
+
+sts <- c("VT4", "VT12", "VT72", "VT23", "VT80", "VT45", "VT22", "VR25", "VR23", "VT76")
+# Check
+# unique(df_aqm$StationCode) %in% sts
+
+df_aqm_rows_to_update <- df_aqm_rows_to_update %>%
+  mutate(StationCode = factor(StationCode, levels = sts))
+```
+
+### Check coverage of data to add
+
+``` r
+df_aqm_rows_to_update %>%
+  mutate(`Has FB data` = ifelse(is.na(FB_Temp_mean), "No", "Yes")) %>%
+  ggplot(aes(Date, StationCode, color = `Has FB data`)) +
+  geom_point() +
+  scale_color_brewer(palette = "Set1") +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of bottle data") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-32-1.png)<!-- -->
+
+### Replace rows in original data
+
+``` r
+df_aqm_rows_to_not_update <- df_aqm %>%
+  filter(!is.na(FB_Temp_mean))
+
+df_aqm_new <- bind_rows(
+  df_aqm_rows_to_not_update,
+  df_aqm_rows_to_update
+)
+```
+
+### Check updated coverage
+
+``` r
+df_aqm_new %>%
+  mutate(`Has FB data` = ifelse(is.na(FB_Temp_mean), "No", "Yes")) %>%
+  ggplot(aes(Date, StationCode, color = `Has FB data`)) +
+  geom_point() +
+  scale_color_brewer(palette = "Set1") +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Stations/dates of bottle data") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-34-1.png)<!-- -->
+
+### Update df\_aqm
+
+``` r
+df_aqm <- df_aqm_new
+```
+
+## 8\. Save
+
+``` r
+saveRDS(df_aqm,
+        "Data/22_df_bottledata_2018_19_with_fbdata.rds")
+
+openxlsx::write.xlsx(df_aqm,
+                     "Datasett/Ferrybox_samples_OneDrive/FA_2018-19_automatic_samples.xlsx")
+```
+
+## 9\. A couple of plots
+
+``` r
+library(viridis)
+
+df_aqm %>%
+  ggplot(aes(Date, StationCode, color = FB_Temp_mean)) +
+  geom_point(size = 5) +
+  scale_color_viridis(option = "magma") +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Temperature") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-37-1.png)<!-- -->
+
+``` r
+df_aqm %>%
+  ggplot(aes(Date, StationCode, color = FB_Salt_mean)) +
+  geom_point(size = 5) +
+  scale_color_viridis(option = "magma") +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Salinity") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-37-2.png)<!-- -->
+
+``` r
+df_aqm %>%
+  ggplot(aes(Date, StationCode, color = log10(FB_Chl_mean))) +
+  geom_point(size = 5) +
+  scale_color_viridis() +
+  geom_vline(xintercept = seq(ymd("2018-01-01"), by = "month", length.out = 24), color = "grey60") +
+  labs(title = "Salinity") +
+  theme_minimal()
+```
+
+![](22_Match_FBdata_to_AqM_stations_files/figure-gfm/unnamed-chunk-37-3.png)<!-- -->
