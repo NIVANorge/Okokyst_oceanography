@@ -1,0 +1,492 @@
+---
+title: "Match ferrybox sample numbers to stations"
+author: "DHJ"
+date: "7 februar 2020"
+output: 
+  html_document:
+    toc: true    
+    toc_flo: true
+  github_document:
+    toc: true
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_dir = "output", output_format = "all") })    
+
+---
+
+Find which sample numbers (in Ferrybox files) belongs to which stations  
+    
+Corresponding numbers in Fantasy:    
+- VT4 = sample no 21-22  
+    
+Corresponding numbers in Trollfjord:    
+- VT4 = sample no 23-24    
+- VT72 = sample no 21-22     
+- VT23 = sample no 17-18    
+- VT80 = sample no 11-12  
+- VT45 = sample no 13-14  
+- VT22 = sample no 15-16   
+- VR25 = sample no 6-7   
+- VR23 = sample no 4-5  
+- VR76 = sample no 2-3  
+   
+
+## 1. Libraries
+```{r}
+
+library(plyr)      # used by functions in "Get_files_NIVA_ftp_server_functions.R" 
+library(dplyr)     # load AFTER plyr, so e,g, we use count() from dplyr
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+source("Get_files_NIVA_ftp_server_functions.R")
+
+# library(niRvana)
+#source("12_QA_2019_from_excel_functions.R")
+# RColorBrewer::display.brewer.all()
+```
+
+## 2. Read AqM station data
+```{r}
+df_aqm_stations <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx", 
+                              sheet = "StationPoint")
+
+```
+
+
+## 3. Ferrybox log data 2019
+
+### a. Ferrybox log data 2019
+We do this before 2018 in order to get the headers (column names),
+which we will use for 2018 data    
+- Data downloaded from Pierre's OneDrive 12.02.2020    
+- [Link to Pierre's OneDrive](https://niva365-my.sharepoint.com/:f:/g/personal/pierre_jaccard_niva_no/Et9g2CZL2_tEg3vOt7ACQh0BHCjrOcKzPz-iAgdYst2ddQ?e=hpkNeW)  
+
+```{r}
+
+df_ferrybox_sampledata_2019_fa <- readxl::read_excel(
+  "Datasett/Ferrybox_samples_OneDrive/FA_2019_automatic_samples.xlsx")
+
+df_ferrybox_sampledata_2019_tf <- readxl::read_excel(
+  "Datasett/Ferrybox_samples_OneDrive/TF_2019_automatic_samples.xlsx")
+
+# names(df_ferrybox_sampledata_2019_fa)
+# names(df_ferrybox_sampledata_2019_tf)
+
+X <- df_ferrybox_sampledata_2019_fa$SYSTEM_DATE_DMY - ymd_hms("1899-12-31 00:00:00")
+
+df_ferrybox_sampledata_2019_fa <- df_ferrybox_sampledata_2019_fa %>%
+  mutate(TIME = SYSTEM_TIME + X)
+
+# Check
+# df_samples_fa$SYSTEM_DATE_DMY %>% head()
+# df_samples_fa$SYSTEM_TIME %>% head()
+# df_samples_fa$TIME %>% head()
+
+unique(df_ferrybox_sampledata_2019_fa$SYSTEM_DATE_DMY)
+
+```
+
+### b. Ferrybox log data 2018   
+```{r}
+
+# 4. Download all Ferrybox log data    
+# Or just use saved log data
+
+redownload_data <- FALSE  # if FALSE, we just read the saved data
+
+
+if (redownload_data){  # takes just a couple of minutes
+  
+  #
+  # a. Get dates and filenames ('df_samplefilenames_fa_2018')  
+  #
+  # get_folders()
+  
+  #
+  # Fantasy
+  #
+  
+  # Get the url for the vessel we want
+  url.folder <- get_url_foldername("fantasy")
+  
+  # Get file names of all log files for that vessel
+  samplefiles_fn <- get_filenames_samplefiles("fantasy")
+  
+  head(samplefiles_fn)
+  # Check
+  # tail(logfiles_fn)
+  
+  # Combine with dates 
+  df_samplefilenames_fa_2018 <- data.frame(
+    filename = samplefiles_fn,
+    Date = ymd(substr(samplefiles_fn, 9, 16)),   # note that 9,16 is specifically for 'samples'
+    stringsAsFactors = FALSE) %>%
+    filter(year(Date) == 2018)
+  
+  
+  #
+  # Trollfjord
+  #
+  
+  # Get the url for the vessel we want
+  url.folder <- get_url_foldername("trollfjord")
+  
+  # Get file names of all log files for that vessel
+  samplefiles_fn <- get_filenames_samplefiles("trollfjord")
+  
+  # Check
+  # tail(logfiles_fn)
+  
+  # Combine with dates 
+  df_samplefilenames_tf_2018 <- data.frame(
+    filename = samplefiles_fn,
+    Date = ymd(substr(samplefiles_fn, 9, 16)), # note that 9,16 is specifically for 'samples'
+    stringsAsFactors = FALSE) %>%
+    filter(year(Date) == 2018)
+  
+  #
+  # b. Combine filenames  
+  #
+  
+  df_samplefilenames_2018 <- 
+    bind_rows(
+      df_samplefilenames_fa_2018 %>% mutate(Ferrybox = "fantasy"),
+      df_samplefilenames_tf_2018 %>% mutate(Ferrybox = "trollfjord")
+    )
+  
+  #
+  # c. Download sample file data
+  #
+  df_ferrybox_sampledata_2018_fa <- get_several_logfiles(
+    df_samplefilenames_fa_2018$filename, 
+    vessel = "fantasy",
+    trace = FALSE)
+  
+  df_ferrybox_sampledata_2018_tf <- get_several_logfiles(
+    df_samplefilenames_tf_2018$filename, 
+    vessel = "trollfjord",
+    trace = FALSE)
+  
+  names(df_ferrybox_sampledata_2018_fa) <- names(df_ferrybox_sampledata_2019_fa)
+  names(df_ferrybox_sampledata_2018_tf) <- names(df_ferrybox_sampledata_2019_tf)
+
+  #
+  # d. Save
+  #
+  saveRDS(df_ferrybox_sampledata_2018_fa,
+          "Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+  saveRDS(df_ferrybox_sampledata_2018_tf,
+          "Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+  
+  
+} else {
+  
+  df_ferrybox_sampledata_2018_fa <-
+    readRDS("Datasett/18_df_ferrybox_sampledata_2018_fa.rds")
+  df_ferrybox_sampledata_2018_tf <-
+    readRDS("Datasett/18_df_ferrybox_sampledata_2018_tf.rds")
+  
+}
+
+
+```
+
+
+### c. Combine data for both years for each ferry     
+- 2018 + 2019  
+- The file columns differ betrween ferries, so we donæt combine them  
+```{r}
+
+#
+# Fantasy
+#
+
+df_ferrybox_sampledata_2018_fa[1:7] %>% str()
+df_ferrybox_sampledata_2019_fa[1:7] %>% str()
+
+df_ferrybox_sampledata_2018_fa <- df_ferrybox_sampledata_2018_fa %>%
+  mutate(SYSTEM_DATE_DMY = dmy_hms(paste(SYSTEM_DATE_DMY, "00:00:00")),
+         SYSTEM_TIME = ymd_hms(paste("1899-12-31", SYSTEM_TIME)))
+
+df_ferrybox_sampledata_fa <- bind_rows(
+  df_ferrybox_sampledata_2018_fa,
+  df_ferrybox_sampledata_2019_fa)
+
+#
+# Trollfjord
+#
+df_ferrybox_sampledata_2018_tf[1:7] %>% str()
+df_ferrybox_sampledata_2019_tf[1:7] %>% str()
+
+df_ferrybox_sampledata_2018_tf <- df_ferrybox_sampledata_2018_tf %>%
+  mutate(SYSTEM_DATE = dmy_hms(paste(SYSTEM_DATE, "00:00:00")),
+         SYSTEM_TIME = ymd_hms(paste("1899-12-31", SYSTEM_TIME)))
+
+df_ferrybox_sampledata_tf <- bind_rows(
+  df_ferrybox_sampledata_2018_tf,
+  df_ferrybox_sampledata_2019_tf)
+
+names(df_ferrybox_sampledata_fa)
+names(df_ferrybox_sampledata_tf)
+
+# df_ferrybox_sampledata <- 
+#   bind_rows()
+
+
+
+```
+
+### d. Save sample files  
+```{r}
+
+saveRDS(df_ferrybox_sampledata_fa,
+        "Datasett/18_df_ferrybox_sampledata_fa.rds")
+saveRDS(df_ferrybox_sampledata_tf,
+        "Datasett/18_df_ferrybox_sampledata_tf.rds")
+
+openxlsx::write.xlsx(df_ferrybox_sampledata_fa,
+                     "Datasett/Ferrybox_samples_OneDrive/FA_2018-19_automatic_samples.xlsx")
+openxlsx::write.xlsx(df_ferrybox_sampledata_tf,
+                     "Datasett/Ferrybox_samples_OneDrive/TF_2018-19_automatic_samples.xlsx")
+  
+```
+
+
+
+### e. Sample numbers used in files   
+Fantasy:     
+- Mostly MANUAL_SAMPLE_COUNTER = 0 and AUTOMATIC_SAMPLE_COUNTER = 1-24   
+- For a few lines MANUAL_SAMPLE_COUNTER = 1-24 and AUTOMATIC_SAMPLE_COUNTER = 0   
+Trollfjord:     
+- Same but variables are called SAMPLE_MAN_NUM and SAMPLE_AUTO_NUM   
+```{r, results = 'hold'}
+
+cat("================================================\n")
+cat("     FANTASY\n")
+#
+# Fantasy
+#
+cat("----------------------------\n")
+cat("MANUAL_SAMPLE_COUNTER == 0\n")
+df_ferrybox_sampledata_fa %>% 
+  filter(MANUAL_SAMPLE_COUNTER == 0) %>% 
+  xtabs(~AUTOMATIC_SAMPLE_COUNTER, .)
+
+cat("----------------------------\n")
+cat("AUTOMATIC_SAMPLE_COUNTER == 0\n")
+df_ferrybox_sampledata_fa %>% 
+  filter(AUTOMATIC_SAMPLE_COUNTER == 0) %>% 
+  xtabs(~MANUAL_SAMPLE_COUNTER, .)
+
+cat("----------------------------\n")
+cat("Both == 0\n")
+df_ferrybox_sampledata_fa %>% 
+  filter(MANUAL_SAMPLE_COUNTER == 0 & AUTOMATIC_SAMPLE_COUNTER == 0) %>% nrow()
+
+cat("================================================\n")
+cat("     TROLLFJORD\n")
+#
+# Trollfjord
+#
+
+cat("----------------------------\n")
+cat("SAMPLE_MAN_NUM == 0\n")
+df_ferrybox_sampledata_tf %>% 
+  filter(SAMPLE_MAN_NUM == 0) %>%
+  xtabs(~SAMPLE_AUTO_NUM, .)
+
+cat("----------------------------\n")
+cat("SAMPLE_AUTO_NUM == 0\n")
+df_ferrybox_sampledata_tf %>% 
+  filter(SAMPLE_AUTO_NUM == 0) %>%
+  xtabs(~SAMPLE_MAN_NUM, .)
+
+```
+
+## 4. Match automatic samples    
+Find which sample numbers (in Ferrybox files) belongs to which stations  
+
+
+### Check samples in map - prepare data    
+```{r}
+
+library(mapview)
+library(sf)
+
+#
+# Fantasy (sf_points_fa)
+#
+
+# Set rownames to "FullStationName" - these will show up when you hover over points with the mouse
+df_points <- df_ferrybox_sampledata_fa %>%
+  filter(AUTOMATIC_SAMPLE_COUNTER > 0) %>%
+  # "copy" coordinates so the show up in popup
+  mutate(Lon = GPS_LONGITUDE, Lat = GPS_LATITUDE) %>%  
+  as.data.frame()   # read_excel makes a tibble, but you can't set row names for tibbles 
+
+# Set rownames (shown at mouse hover) - must be unique
+rownames(df_points) <- with(df_points,
+                            paste(SHIP_CODE, AUTOMATIC_SAMPLE_COUNTER, 
+                                  SYSTEM_DATE_DMY))
+
+sf_points_fa <- st_as_sf(df_points,
+                          coords = c("GPS_LONGITUDE", "GPS_LATITUDE"),
+                          crs = "+proj=longlat +ellps=WGS84")
+
+#
+# Trollfjord (sf_points_tf)
+#
+
+# Set rownames to "FullStationName" - these will show up when you hover over points with the mouse
+df_points <- df_ferrybox_sampledata_tf %>%
+  filter(SAMPLE_AUTO_NUM > 0) %>%
+  # "copy" coordinates so the show up in popup
+  mutate(Lon = GPS_LON, Lat = GPS_LAT) %>%  
+  as.data.frame()   # read_excel makes a tibble, but you can't set row names for tibbles 
+
+# Set rownames (shown at mouse hover) - must be unique
+rownames(df_points) <- with(df_points,
+                            paste(SHIP_CODE, SAMPLE_AUTO_NUM, 
+                                  SYSTEM_DATE, SYSTEM_TIME))
+
+sf_points_tf <- st_as_sf(df_points,
+                          coords = c("GPS_LON", "GPS_LAT"),
+                          crs = "+proj=longlat +ellps=WGS84")
+
+```
+
+
+### Check Fantasy samples in map     
+```{r}
+m_fa <- mapview(sf_points_fa, alpha.regions = 0.2)
+m_fa
+
+```
+
+### Check Trollfjord samples in map   
+```{r}
+m_tf <- mapview(sf_points_tf, alpha.regions = 0.2)
+m_tf
+
+```
+
+
+### Check stations in map  
+```{r}
+
+df_aqm_stations <- as.data.frame(df_aqm_stations)
+
+rownames(df_aqm_stations) <- df_aqm_stations$StationCode  
+
+sf_points_stations <- st_as_sf(df_aqm_stations,
+                       coords = c("Longitude", "Latitude"),
+                       crs = "+proj=longlat +ellps=WGS84")
+
+mapview(sf_points_stations)
+
+```
+
+### Stations vs Fantasy sample positions   
+Correspondence:  
+- VT4 = sample no 21-22
+```{r}
+
+m_fa +mapview(sf_points_stations, color = "red") 
+
+```
+
+### Stations vs Trollfjord sample positions   
+Correspondence:  
+- VT4 = sample no 23-24    
+- VT72 = sample no 21-22     
+- VT23 = sample no 17-18    
+- VT80 = sample no 11-12  
+- VT45 = sample no 13-14  
+- VT22 = sample no 15-16   
+- VR25 = sample no 6-7   
+- VR23 = sample no 4-5  
+- VR76 = sample no 2-3  
+
+```{r}
+
+m_tf + mapview(sf_points_stations, color = "red") 
+
+```
+
+
+
+## 5. Check positions of manual samples  
+
+### Check samples in map - prepare data    
+```{r}
+
+library(mapview)
+library(sf)
+
+#
+# Fantasy (sf_points_fa)
+#
+
+# Set rownames to "FullStationName" - these will show up when you hover over points with the mouse
+df_points <- df_ferrybox_sampledata_fa %>%
+  filter(MANUAL_SAMPLE_COUNTER > 0) %>%
+  # "copy" coordinates so the show up in popup
+  mutate(Lon = GPS_LONGITUDE, Lat = GPS_LATITUDE) %>%  
+  as.data.frame()   # read_excel makes a tibble, but you can't set row names for tibbles 
+
+# Set rownames (shown at mouse hover) - must be unique
+rownames(df_points) <- with(df_points,
+                            paste(SHIP_CODE, MANUAL_SAMPLE_COUNTER, 
+                                  SYSTEM_DATE_DMY, SYSTEM_TIME))
+
+sf_points_fa <- st_as_sf(df_points,
+                          coords = c("GPS_LONGITUDE", "GPS_LATITUDE"),
+                          crs = "+proj=longlat +ellps=WGS84")
+
+#
+# Trollfjord (sf_points_tf)
+#
+
+# Set rownames to "FullStationName" - these will show up when you hover over points with the mouse
+df_points <- df_ferrybox_sampledata_tf %>%
+  filter(SAMPLE_MAN_NUM > 0) %>%
+  # "copy" coordinates so the show up in popup
+  mutate(Lon = GPS_LON, Lat = GPS_LAT) %>%  
+  as.data.frame()   # read_excel makes a tibble, but you can't set row names for tibbles 
+
+# Set rownames (shown at mouse hover) - must be unique
+rownames(df_points) <- with(df_points,
+                            paste(SHIP_CODE, SAMPLE_MAN_NUM, 
+                                  SYSTEM_DATE, SYSTEM_TIME))
+
+sf_points_tf <- st_as_sf(df_points,
+                          coords = c("GPS_LON", "GPS_LAT"),
+                          crs = "+proj=longlat +ellps=WGS84")
+
+```
+
+
+### Check Fantasy samples in map     
+```{r}
+m_fa <- mapview(sf_points_fa, alpha.regions = 0.2)
+m_fa
+
+```
+
+
+### Check Trollfjord samples in map     
+```{r}
+m_fa <- mapview(sf_points_tf, alpha.regions = 0.2)
+m_fa
+
+```
+
+
+
+
+
