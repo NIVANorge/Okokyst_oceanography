@@ -69,9 +69,9 @@ df_aqm_stations <- read_excel("Datasett/AqM_2017_2019_ØKOKYST_Ferrybox_ToR.xlsx
 ```
 
 
-## 3. Ferrybox log data 2019
+## 3. Ferrybox sample data 2018-2019
 
-### a. Ferrybox log data 2019
+### a. Ferrybox sample data 2019
 We do this before 2018 in order to get the headers (column names),
 which we will use for 2018 data    
 - Data downloaded from Pierre's OneDrive 12.02.2020    
@@ -102,7 +102,7 @@ unique(df_ferrybox_sampledata_2019_fa$SYSTEM_DATE_DMY)
 
 ```
 
-### b. Ferrybox log data 2018   
+### b. Ferrybox sample data 2018   
 ```{r}
 
 # 4. Download all Ferrybox log data    
