@@ -5,7 +5,8 @@ date: "25 2 2020"
 output: 
   html_document:
     toc: true
-    toc-float: true  
+    toc_float: true  
+    keep_md: true  
 ---
 
 ## 1. Libraries  
@@ -213,7 +214,18 @@ dat1$Time <- as.POSIXct((dat1$TIME - 719529)*86400, origin = "1970-01-01", tz = 
 
 # dat_list[[8]] %>% head()
 
-summary(dat1)
+# summary(dat1)
+
+dat1 <- dat1 %>%
+  mutate(d_seconds = (Time - lag(Time))/dseconds(1),
+         d_lat = Lat - lag(Lat),
+         Northbound = case_when(
+           is.na(d_lat) ~ as.logical(NA),
+           d_seconds > 300 ~ as.logical(NA),
+           d_lat >= 0 ~ TRUE,
+           d_lat < 0 ~ FALSE)
+         ) %>%
+  select(Time, Lat, Lon, Temp, Sal, Northbound)
 
 ```
 
@@ -225,6 +237,13 @@ dat1 %>%
   ggplot(aes(Time, Lat, color = Temp)) + 
   geom_point(alpha = 0.3) +
   scale_color_viridis(limits = c(-3, 25))
+
+
+# dat1 %>% 
+#   sample_n(20000) %>%
+#   ggplot(aes(Time, Lat, color = Northbound)) + 
+#   geom_point(alpha = 0.3)
+
 
 ```
 
@@ -242,7 +261,8 @@ fns <- sprintf(fn_pattern, yrs)
 names(fns) <- yrs
 dat_list2 <- fns %>% map(read_csv)
 
-dat2 <- bind_rows(dat_list2)
+dat2 <- bind_rows(dat_list2) %>%
+  select(Time, Lat, Lon, Temp, Sal, Northbound)
 
 # Check variable names:  
 # dat_list2 %>% map(names)
@@ -324,6 +344,28 @@ dat %>%
 ```
 
 ### Temp at ca Dk1  
+Ca 59.832  
+Note some suspicious zero values in 2012-2013 + high values inb 2016  
 ```{r}
+
+df <- dat %>%
+  filter(Lat > 59.827 & Lat < 59.837) %>%
+  filter(Temp > (-4) & Temp <= 25) %>%
+  mutate(Day = round_date(Time),
+         North = Lat > lag(Lat)) %>%
+  group_by(Day, Northbound) %>%
+  summarise(Temp = mean(Temp, na.rm = TRUE))
+
+ggplot(df, aes(Day, Temp)) +
+  geom_point(alpha = 0.2)
+
+
+```
+
+## 9. Save  
+```{r}
+
+saveRDS(dat, "Data/31_Colorline_2002_2018.rds")
+
 ```
 
