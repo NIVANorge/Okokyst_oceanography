@@ -1,0 +1,152 @@
+---
+title: "QA for CTDs in Glomfjord - ØKOKYST 2019 report"
+author: "DHJ"
+date: "13 1 2020"
+output:
+  html_document:
+    keep_md: true
+    toc: true
+    toc_float: true
+
+---
+
+### QC done January 2020   
+- Only CTDs with salinity + temp only    
+- See mail from Caroline Mengeot <caroline.mengeot@niva.no> tirsdag 28. januar 2020 10:33  
+
+```{r, echo=FALSE, results='hide', message=FALSE}
+
+## 1. Libraries
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+
+# library(niRvana)
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")
+
+# RColorBrewer::display.brewer.all()
+
+
+
+```
+
+
+## 1. Read file   
+Only one file in this case, as in script 16 (and in contrast to script 15)  
+```{r, echo = FALSE, results = 'hide'}
+
+datafolder <- "K:/Prosjekter/!!! Tiltaksrettet industriovervåkning iht. vannforskriften/16371 - Yara Glomfjorden (tidl.14380)/_2019/Vannsøyle/xlsbase/TilAquamonitor"
+
+# dir(datafolder)
+fn <- paste0(datafolder, "/", "glomfjord_CTD_2018-2019_til_Aqm.xlsm")
+
+readxl::excel_sheets(fn)
+# Check top of file:
+# read_excel(fn, sheet = "Data", n_max = 200)
+dat <- read_excel_droplines(fn, sheet = "Data")
+
+# Fix the first column names
+# NOT NEEDED
+
+# Add station names
+dat_stations <- read_excel(fn, sheet = "Stations")
+
+dat <- dat %>%
+  left_join(dat_stations) %>%
+  rename(StationCode = StationName)  # for 'plot_ctdprofile_station'
+
+```
+
+
+
+## 2. Tables of stations    
+```{r, echo = FALSE}
+dat %>%
+  count(StationCode)
+
+# dat %>%
+#   count(SampleDate)
+# 
+# dat %>%
+#   count(StationCode, Date)
+
+stations <- dat %>%
+  count(StationCode) %>%
+  pull(StationCode)
+
+```
+
+
+## 3. Salinity  
+_NOTE: also see plots for top 20 m further down._  
+   
+- Gl_5: Profile looks strange at 20-30 m in April 2019 (and no pattern in temperature)  
+   
+- Very low salinity at 0-1 meter:     
+    + Dec 2018 at Gl_3 and Gl_5: Dubious? no indication of top freshwater layer in temperature  
+    + 4. April 2019 Gl_5: Dubious? no indication of top freshwater layer in temperature  
+    + 21 June 2019 at Gl_6: Dubious? little indication of top freshwater layer in temperature  
+    + July 2019 at Gl_2 and Gl_3: probably OK - temperature also indicates top freshwater layer  
+    + 15 Aug 2019 at Gl_2 and Gl_4: Dubious? little indication of top freshwater layer in temperature  
+
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+# Test one station:
+# plot_ctdprofile_station("VT16", data = dat, variable = "Saltholdighet", points = FALSE)
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Saltholdighet", points = FALSE)
+
+```
+
+
+
+## 4. Temperature    
+_NOTE: also see plots for top 20 m further down._  
+  
+- Gl_5: 23. April 2019 - Both salinity and temperature looks almost stuck during the top 20 m, but both do in fact vary  
+  
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Temperatur", points = FALSE)
+
+```
+
+## 5. Salinity top 20 m 
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+dat20m <- dat %>% filter(Depth1 < 20)
+
+stations %>% walk(plot_ctdprofile_station, data = dat20m, variable = "Saltholdighet", points = FALSE)
+
+```
+
+## 6. Temperature top 20 m 
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat20m, variable = "Temperatur", points = FALSE)
+
+```
+
+## 7. Check Gl_5 at 23. April 2019   
+Both salinity and temperature looks almost stuck during the top 20 m   
+- but both do in fact vary   
+```{r}
+
+dat %>%
+   filter(StationCode %in% "Gl_5" & 
+            Date > ymd("2019-04-23") & Date < ymd("2019-04-24") &
+            Depth1 < 20) %>%
+  select(Depth1:Temperatur) %>%
+  as.data.frame()
+
+
+
+```
+
