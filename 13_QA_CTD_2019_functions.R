@@ -171,14 +171,14 @@ get_stations <- function(file_number, df_fileinfo = fileinfo,
 #
 # Read excel file which has column names in first row, then (typically) units in the second row and data from 3rd row
 #
-read_excel_droplines <- function(fn, sheetname, first_data_row = 3){
+read_excel_droplines <- function(fn, sheetname, first_data_row = 3, cut_columns = FALSE, ...){
   # Read top line, only for the column names
   df_names <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = first_data_row)
   # Read data. All data is read as text (strings) and later converted, due to the "<" signs
-  data <- read_excel(fn, sheet = sheetname, col_names = FALSE, skip = first_data_row-1)
+  data <- read_excel(fn, sheet = sheetname, col_names = FALSE, skip = first_data_row-1, ...)
   # Set column names (copy them from df_names)
-  if (ncol(df_names) == ncol(data)){
-    names(data) <- names(df_names)
+  if (ncol(df_names) == ncol(data) | cut_columns){
+    names(data) <- names(df_names)[1:ncol(data)]
   } else {
     stop("First line doesn't have the same number of columns as the rest of the file!")
   }
@@ -188,6 +188,32 @@ read_excel_droplines <- function(fn, sheetname, first_data_row = 3){
 # Example
 # fn <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor1_RMS/xlsbase/TilAquamonitor/?kokyst_Norskehavet_S?r1_CTD_2017.xlsm"
 # read_excel_droplines(fn, "data")
+
+read_excel_til_AqM <- function(fn, sheetname, first_data_row = 5, 
+                               header1_col = 1:9, header1_row = 4,
+                               header2_col = 10:13, header2_row = 2, ...){
+  # Read top line, only for the column names
+  df_names1 <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 1, skip = header1_row-1)[header1_col]
+  df_names2 <- read_excel(fn, sheet = sheetname, col_names = TRUE, n_max = 1, skip = header2_row-1)[header2_col]
+  # Read data. All data is read as text (strings) and later converted, due to the "<" signs
+  data <- read_excel(fn, sheet = sheetname, col_names = FALSE, skip = first_data_row-1, ...)
+  # Set column names (copy them from df_names)
+  if (TRUE){
+    names(data)[header1_col] <- names(df_names1)
+    names(data)[header2_col] <- names(df_names2)
+  } else {
+    stop("First line doesn't have the same number of columns as the rest of the file!")
+  }
+  data
+}
+
+# Example
+# datafolder1 <- "K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017/OKOKYST_NH_Sor2_Aquakompetanse/xlsbase"
+# datafolder1 <- "Datasett/OKOKYST_NH_Sor2_Aquakompetanse/xlsbase"
+# fn <- paste0(datafolder1, "/TilAquamonitor/VR52_CTD+siktdyp_2019_Til_AqM.xlsm")
+# # debugonce(read_excel_til_AqM)
+# test <- read_excel_til_AqM(fn, "CTD")
+
 
 #
 # FUNCTIONS FOR CTD QC ----
@@ -257,13 +283,19 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
 # Handles the use of both 'StationCode' and 'StationId'  
 #
 plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", 
-                                    limits = NULL, points = FALSE){
+                                    limits = NULL, points = FALSE, referencelines = NULL){
   if ("StationCode" %in% names(data)){
     df <- data %>%
       filter(StationCode %in% stationcode & !is.na(.data[[variable]]))
+    if (nrow(df) == 0){
+      stop("No data found for this StationCode value")
+    }
   } else {
     df <- data %>%
       filter(StationId %in% stationcode & !is.na(.data[[variable]]))
+    if (nrow(df) == 0){
+      stop("No data found for this StationId value")
+    }
   }
   df <- df %>%
     group_by(Date) %>%
@@ -284,6 +316,9 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
     }
     if (!is.null(limits)){
       gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
+    }
+    if (!is.null(referencelines)){
+      gg <- gg + geom_vline(aes(xintercept = referencelines), linetype = 2)
     }
     print(gg)
   }
@@ -396,7 +431,7 @@ plot_timeseries_station <- function(stationcode, data, variable, titletext = "")
               "#94336A", "#832F7A", "#673581", "#3C417E")
   maxdepth_by_date <- df %>%
     group_by(Date) %>%
-    summarise(Max_depth = max(Depth, na.rm = TRUE)) %>%
+    summarise(Max_depth = max(Depth, na.rm = TRUE), .groups = "drop") %>%
     pull(Max_depth)
   depths <- c(0, 1, 5, 10, 20, 50, 100, 200)
   # If minimum max-depth is >10% lower than median max-depth ,we plot it
