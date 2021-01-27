@@ -1,0 +1,331 @@
+---
+title: "17. QC Norskehavet Sør I"
+author: "DHJ"
+date: "16 2 2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    keep_md: true
+---
+
+**QC of Norskehavet Sør I (Caroline + Lars)**      
+- Checked input to these files:  
+`K:\Prosjekter\Sjøvann\KYSTOVERVÅKING ØKOKYST\KYSTOVERVÅKING ØKOKYST 2017-2020\ØKOKYST DP Norskehavet Sør I O-17091_18091_19091_200091\Rapport 2019-data\klassification`
+- Stations:
+    + VT71 Skinnbrokleia
+    + VR51 Korsen
+  
+- **Note: Here we download data from Aquamonitor insted of reading excel files (as last year)**  
+
+**Veileder:**  
+- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- Chlorophyll: page 91.   
+"I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
+"Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
+90% percentiles should be used   
+  
+- Also see calculation example on on page 187-189, and the comment on page 189:  
+"Det gjøres oppmerksom på at dataprogrammene som beregner 90-persentil, gjerne benytter ulike metoder". We use the Excel method PERCENTILE.EXC, corresponding to type 6 quantiles in R  
+  
+- Nutrients: page 102 in veileder  
+Vinter er november til og med februar   
+Sommer er juni til og med august  
+
+  
+## 0. Libraries   
+If you ony want to look at Norskehavet Sør 1  you can skip to 11 after this chunk      
+```{r}
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(knitr)         
+library(RColorBrewer)
+
+# library(niRvana)
+
+source('11_Read_from_Nivabasen_functions.R')  # Used to read from Nivadatabase
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")          # used in section 15  
+
+
+library(niRvana)
+
+# RColorBrewer::display.brewer.all()
+```
+
+### Set Nivadabase password 
+
+```{r}
+# Do this once:
+# set_credentials()
+
+```
+
+
+## 1. Read Norskehavet Nord I nutrients     
+
+```{r}
+
+### Test  
+# - Run only to find which parameter names/ids to use (from WC_PARAMETER_DEFINITIONS)   
+
+# We start with station VR51, and dig all the way from 
+# table PROJECTS_STATIONS to WC_PARAMETER_DEFINITIONS
+
+if (FALSE){
+  
+  # For copy/pasting column names  
+  nm <- function(df)
+    names(df)  %>% paste(collapse = ", ")
+  
+  df_projstat <- get_nivabase_selection(
+    "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME, STATION_IS_ACTIVE", 
+    "PROJECTS_STATIONS", 
+    "STATION_CODE", 
+    "VR51", values_are_text = TRUE)
+  df_projstat
+  
+  df_watersamp <- get_nivabase_selection(
+    "WATER_SAMPLE_ID, STATION_ID, SAMPLE_DATE, DEPTH1, DEPTH2, REMARK, SAMPLE_POINT_ID",
+    "WATER_SAMPLES", 
+    "STATION_ID, ", 
+    df_projstat$STATION_ID)
+  
+  df_waterchem <- get_nivabase_selection(
+    "WATER_SAMPLE_ID, METHOD_ID, VALUE, UNCERTAINTY, FLAG1, FLAG2, REMARK, APPROVED", 
+    "WATER_CHEMISTRY_VALUES", 
+    "WATER_SAMPLE_ID", 
+    subset(df_watersamp, year(SAMPLE_DATE) == 2020 & month(SAMPLE_DATE) == 8)$WATER_SAMPLE_ID)
+  
+  # df_waterchem %>% nm() 
+  
+  xtabs(~METHOD_ID, df3a)
+  
+  df_m <- get_nivabase_selection(
+    "METHOD_ID, NAME, UNIT, LABORATORY, DESCR, MATRIX, CAS, IUPAC", 
+    "METHOD_DEFINITIONS", 
+    "METHOD_ID", 
+    unique(df_waterchem$METHOD_ID))
+  
+  df_mpar  <- get_nivabase_selection(
+    "PARAMETER_ID, METHOD_ID, CONVERSION_FACTOR", 
+    "WC_PARAMETERS_METHODS", 
+    "METHOD_ID", 
+    df_m$METHOD_ID)
+  # nm(df_mpar)
+  
+  df_par <- get_nivabase_selection(
+    "*", 
+    "WC_PARAMETER_DEFINITIONS", 
+    "PARAMETER_ID", 
+    unique(df_mpar$PARAMETER_ID))
+  par_names1 <- df_par$NAME
+  
+  # Get the other TOTN parameters too
+  df_par_all <- get_nivabase_data(
+    "select * from NIVADATABASE.WC_PARAMETER_DEFINITIONS")  # 716 rows
+  nm(df_par_all)
+  
+  par_names2 <- df_par_all %>%
+    filter(grepl("TOTN", NAME) & !DESCR %in% "FAGDATA2") %>%
+    pull(NAME)
+  
+  par_names <- unique(c(par_names1, par_names2))
+  par_names
+  
+} 
+# dput(par_names)
+
+```
+
+### Get data  
+```{r}
+
+# Read from NIvabase (1 minute) or read from saved data?
+read_from_nivabase <- FALSE
+
+
+par_names <- c("NO3+NO2-N", "NH4-N", "TOTP", "PO4-P", "SiO2", 
+               "KlfA", "TSM", 
+               "TOTN (old EF)", "TOTN", "TOTN (est.)")
+
+stations <-  c("VR51", "VT71")
+
+
+if (read_from_nivabase){
+  # debugonce(get_water_chemistry)
+  df_chem <- get_water_chemistry(stationcodes = stations,
+                                 parameters = par_names, 
+                                 years = 2017:2020) %>%
+    mutate(Year = year(SAMPLE_DATE),
+           Month = month(SAMPLE_DATE))
+  
+  # Uncomment to save again:
+  # saveRDS(df_chem, "Data/17_2020_df_chem.rds")  
+  
+} else {
+
+  df_chem <- readRDS("Data/17_2020_df_chem.rds")  
+  
+}
+
+cat(nrow(df_chem), "rows of data downloaded \n")
+cat("Stations:", paste(stations, collapse = ", "), "\n")
+cat("Parameters:", paste(par_names, collapse = ", "), "\n")
+
+```
+
+
+### Measurements by parameter, site and year    
+```{r}
+
+xtabs(~Year + PARAM_NAME + STATION_CODE, df_chem)
+
+```
+### Measurements by depth, site and year    
+```{r}
+
+df_chem %>%
+  distinct(STATION_CODE, Year, DEPTH1, SAMPLE_DATE) %>%
+  xtabs(~ DEPTH1 + Year + STATION_CODE, .)
+
+```
+### Parameters  
+```{r}
+
+check <- df_chem %>%
+  group_by(STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME) %>%
+  summarise(n = n()) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0)
+  stop("Some combinations of STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME occurs >1 time!")
+
+df_chem %>%
+  count(PARAM_NAME, NAME)
+
+```
+
+### Reformat data
+```{r}
+
+dat <- df_chem %>%
+  select(STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = "PARAM_NAME", values_from = "VALUE") %>%
+  rename(StationCode = STATION_CODE, 
+         Date = SAMPLE_DATE, 
+         Depth1 = DEPTH1)
+
+dat
+
+```
+  
+## Chl a   
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "KlfA", points = TRUE)
+
+```
+
+## Nutrients  {.tabset}
+
+```{r, echo = FALSE}
+
+# 
+# Alternative way - but doesn't give headings  
+#
+if (FALSE){
+  
+  df <- df_chem %>%
+    distinct(STATION_CODE, PARAM_NAME) 
+  
+  walk2(
+    df$STATION_CODE[1:3],
+    df$PARAM_NAME[1:3],
+    ~plot_ctdprofile_station(stationcode = .x, 
+                             variable = .y,
+                             data = dat, 
+                             points = TRUE)
+  )
+  
+}
+
+```
+
+### NH4-N
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "NH4-N", points = TRUE)
+
+```
+
+
+### NO3+NO2-N
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "NO3+NO2-N", points = TRUE)
+
+```
+
+
+### TOTN
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTN", points = TRUE)
+
+```
+
+
+### TOTN (old EF) 
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTN (old EF)", points = TRUE)
+
+```
+
+
+### PO4-P
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "PO4-P", points = TRUE)
+
+```
+
+### TOTP
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTP", points = TRUE)
+
+```
+
+### SiO2
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "SiO2", points = TRUE)
+
+```
+
+### TSM
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TSM", points = TRUE)
+
+```
+
+
+
