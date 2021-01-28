@@ -283,7 +283,8 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
 # Handles the use of both 'StationCode' and 'StationId'  
 #
 plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", 
-                                    limits = NULL, points = FALSE, referencelines = NULL){
+                                    limits = NULL, points = FALSE, referencelines = NULL,
+                                    year_by_month = FALSE){
   if ("StationCode" %in% names(data)){
     df <- data %>%
       filter(StationCode %in% stationcode & !is.na(.data[[variable]]))
@@ -297,6 +298,11 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
       stop("No data found for this StationId value")
     }
   }
+  if (sum(c("Year","Month") %in% names(df)) < 2 & year_by_month){
+    df <- df %>%
+      mutate(Year = lubridate::year(Date),
+             Month = lubridate::month(Date))
+  }
   df <- df %>%
     group_by(Date) %>%
     mutate(n = n()) %>%
@@ -308,9 +314,14 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
       ggplot(aes(.data[[variable]], Depth1)) +
       geom_path() +
       scale_y_reverse() + 
-      facet_wrap("Date") +
       labs(title = paste(titletext, stationcode, " - ", variable),
-           x = variable)
+           x = variable) +
+      theme(axis.text.x = element_text(angle = -45, hjust = 0))
+    if (year_by_month){
+      gg <- gg + facet_grid(rows = vars(Year), cols = vars(Month))
+    } else {  
+      gg <- gg + facet_wrap(vars(Date))
+    }
     if (points){
       gg <- gg + geom_point()
     }
