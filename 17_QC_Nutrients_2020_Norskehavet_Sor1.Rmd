@@ -1,7 +1,7 @@
 ---
-title: "17. QC Norskehavet Sør I"
+title: "QC Norskehavet Sør I, nutrients + Chl"
 author: "DHJ"
-date: "16 2 2020"
+date: "28.02.2021"
 output: 
   html_document:
     toc: true
@@ -33,9 +33,9 @@ Vinter er november til og med februar
 Sommer er juni til og med august  
 
   
-## 0. Libraries   
-If you ony want to look at Norskehavet Sør 1  you can skip to 11 after this chunk      
-```{r}
+```{r, echo = FALSE, results='hide', warning=FALSE, message=FALSE}
+
+### 0. Libraries   
 
 library(dplyr)
 library(purrr)
@@ -51,17 +51,20 @@ library(RColorBrewer)
 source('11_Read_from_Nivabasen_functions.R')  # Used to read from Nivadatabase
 
 source("12_QA_2019_from_excel_functions.R")
-source("13_QA_CTD_2019_functions.R")          # used in section 15  
-
+source("13_QA_CTD_2019_functions.R")          # plot_ctdprofile_station
 
 library(niRvana)
+
+knitr::opts_chunk$set(results = 'hold', echo = FALSE)
 
 # RColorBrewer::display.brewer.all()
 ```
 
+
+```{r, echo = FALSE}
+
 ### Set Nivadabase password 
 
-```{r}
 # Do this once:
 # set_credentials()
 
@@ -70,7 +73,7 @@ library(niRvana)
 
 ## 1. Read Norskehavet Nord I nutrients     
 
-```{r}
+```{r, echo = FALSE}
 
 ### Test  
 # - Run only to find which parameter names/ids to use (from WC_PARAMETER_DEFINITIONS)   
@@ -201,7 +204,7 @@ df_chem %>%
 
 check <- df_chem %>%
   group_by(STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME) %>%
-  summarise(n = n()) %>%
+  summarise(n = n(), .groups = 'drop') %>%
   filter(n > 1)
 
 if (nrow(check) > 0)
@@ -212,7 +215,8 @@ df_chem %>%
 
 ```
 
-### Reformat data
+### Reformat data    
+Formatting the data in 'wide' format (one column per paremeter) as shown below  
 ```{r}
 
 dat <- df_chem %>%
@@ -220,26 +224,30 @@ dat <- df_chem %>%
   tidyr::pivot_wider(names_from = "PARAM_NAME", values_from = "VALUE") %>%
   rename(StationCode = STATION_CODE, 
          Date = SAMPLE_DATE, 
-         Depth1 = DEPTH1)
+         Depth1 = DEPTH1) %>%
+  mutate(Year = year(Date),
+         Month = month(Date),  
+         `Nitrate + ammonium` = `NO3+NO2-N` + `NH4-N`)  
 
-dat
+
+head(dat, 4)
 
 ```
   
 ## Chl a   
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "KlfA", points = TRUE)
+                  variable = "KlfA", points = TRUE, year_by_month = TRUE)
 
 ```
 
 ## Nutrients  {.tabset}
 
-```{r, echo = FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 # 
-# Alternative way - but doesn't give headings  
+# Alternative way, prints all variables + stations - but doesn't give headings  
 #
 if (FALSE){
   
@@ -252,7 +260,7 @@ if (FALSE){
     ~plot_ctdprofile_station(stationcode = .x, 
                              variable = .y,
                              data = dat, 
-                             points = TRUE)
+                             points = TRUE, year_by_month = TRUE)
   )
   
 }
@@ -260,72 +268,102 @@ if (FALSE){
 ```
 
 ### NH4-N
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "NH4-N", points = TRUE)
+                  variable = "NH4-N", points = TRUE, year_by_month = TRUE)
 
 ```
 
 
 ### NO3+NO2-N
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "NO3+NO2-N", points = TRUE)
+                  variable = "NO3+NO2-N", points = TRUE, year_by_month = TRUE)
 
 ```
 
 
 ### TOTN
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "TOTN", points = TRUE)
+                  variable = "TOTN", points = TRUE, year_by_month = TRUE)
 
 ```
 
 
 ### TOTN (old EF) 
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "TOTN (old EF)", points = TRUE)
+                  variable = "TOTN (old EF)", points = TRUE, year_by_month = TRUE)
 
 ```
 
 
 ### PO4-P
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "PO4-P", points = TRUE)
+                  variable = "PO4-P", points = TRUE, year_by_month = TRUE)
 
 ```
 
 ### TOTP
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "TOTP", points = TRUE)
+                  variable = "TOTP", points = TRUE, year_by_month = TRUE)
 
 ```
 
 ### SiO2
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "SiO2", points = TRUE)
+                  variable = "SiO2", points = TRUE, year_by_month = TRUE)
 
 ```
 
 ### TSM
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
-                  variable = "TSM", points = TRUE)
+                  variable = "TSM", points = TRUE, year_by_month = TRUE)
 
 ```
+
+## TotN versus the sum of nitrate + ammonium    
+```{r, echo = FALSE, fig.width=10, fig.height=5.5, warning=FALSE}
+
+df_nit <- dat %>%
+  select(StationCode, Year, Month, Depth1, `Nitrate + ammonium`, TOTN, `TOTN (old EF)`) %>%
+  tidyr::pivot_longer(
+    `Nitrate + ammonium`:`TOTN (old EF)`,
+    names_to = "Parameter",
+    values_to = "Concentration")
+
+func <- function(station){
+  
+  df_nit %>%
+    filter(StationCode == station) %>%
+    ggplot(aes(Concentration, Depth1, color = Parameter)) +
+    geom_path() + geom_point() +
+    scale_y_reverse() +
+    facet_grid(rows = vars(Year), cols = vars(Month)) +
+    theme(legend.position = "bottom",
+          axis.text.x = element_text(angle = -45, hjust = 0)) +
+    labs(title = paste0(station, ", TotN versus the sum of nitrate + ammonium"))
+
+}
+
+func(stations[[1]])
+func(stations[[2]])
+
+```
+
 
 
 
