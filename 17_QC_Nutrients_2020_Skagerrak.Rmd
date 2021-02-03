@@ -1,0 +1,278 @@
+---
+title: "QC Skagerrak, nutrients + Chl"
+author: "DHJ"
+date: "28.02.2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    keep_md: true
+---
+
+**QC of Norskehavet Sør I (Caroline + Lars)**      
+- Stations:  
+    + VT16, VT52, VT53, VT69, VT70, VT74, VT75, VT79 
+    
+- **Note: Here we download data from Aquamonitor insted of reading excel files (as last year)**  
+  
+**Veileder:**  
+- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- Chlorophyll: page 91.   
+"I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
+"Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
+90% percentiles should be used   
+  
+- Also see calculation example on on page 187-189, and the comment on page 189:  
+"Det gjøres oppmerksom på at dataprogrammene som beregner 90-persentil, gjerne benytter ulike metoder". We use the Excel method PERCENTILE.EXC, corresponding to type 6 quantiles in R  
+  
+- Nutrients: page 102 in veileder  
+Vinter er november til og med februar   
+Sommer er juni til og med august  
+
+  
+```{r, echo = FALSE, results='hide', warning=FALSE, message=FALSE}
+
+### 0. Libraries   
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(knitr)         
+library(RColorBrewer)
+
+# library(niRvana)
+
+source('11_Read_from_Nivabasen_functions.R')  # Used to read from Nivadatabase
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")          # plot_ctdprofile_station
+
+library(niRvana)
+
+knitr::opts_chunk$set(results = 'hold', echo = FALSE)
+
+# RColorBrewer::display.brewer.all()
+```
+
+
+```{r, echo = FALSE}
+
+### Set Nivadabase password 
+
+# Do this once:
+# set_credentials()
+
+```
+
+
+## 1. Read nutrients     
+
+### Get data  
+```{r}
+
+# For DHJ only - used to find stations: 
+# df <- read.delim("C:/Data/Hjelp/Helene_profilplott/Datasett/Nordsj_nord_nutrients_2017_2020.txt")
+# stations <- table(df$StationCode) %>% names()
+# dput(stations)
+
+stations <- c("VT16", "VT52", "VT53", "VT69", "VT70", "VT74", "VT75", "VT79")
+cat("Stations: \n", stations, "\n\n")
+
+# Read from NIvabase (1 minute) or read from saved data?
+read_from_nivabase <- FALSE
+# read_from_nivabase <- TRUE
+
+
+par_names <- c("NO3+NO2-N", "NH4-N", "TOTP", "PO4-P", "SiO2", 
+               "KlfA", "TSM", 
+               "TOTN (old EF)", "TOTN", "TOTN (est.)")
+
+if (read_from_nivabase){
+  
+  # debugonce(get_water_chemistry)
+  df_chem <- get_water_chemistry(stationcodes = stations,
+                                 parameters = par_names, 
+                                 years = 2017:2020) %>%
+    mutate(Year = year(SAMPLE_DATE),
+           Month = month(SAMPLE_DATE))
+  
+  # Uncomment to save (overwrite) data:
+  saveRDS(df_chem, "Data/17_2020_Skagerrak.rds")  
+  
+} else {
+
+  df_chem <- readRDS("Data/17_2020_Skagerrak.rds")  
+  
+}
+
+
+cat(nrow(df_chem), "rows of data downloaded \n")
+cat("Stations:", paste(stations, collapse = ", "), "\n")
+cat("Parameters:", paste(par_names, collapse = ", "), "\n")
+
+```
+
+
+### Measurements by parameter, site and year    
+```{r}
+
+xtabs(~Year + PARAM_NAME + STATION_CODE, df_chem)
+
+```
+### Measurements by depth, site and year    
+```{r}
+
+df_chem %>%
+  distinct(STATION_CODE, Year, DEPTH1, SAMPLE_DATE) %>%
+  xtabs(~ DEPTH1 + Year + STATION_CODE, .)
+
+```
+### Parameters  
+```{r}
+
+check <- df_chem %>%
+  group_by(STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME) %>%
+  summarise(n = n(), .groups = 'drop') %>%
+  filter(n > 1)
+
+if (nrow(check) > 0)
+  stop("Some combinations of STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME occurs >1 time!")
+
+df_chem %>%
+  count(PARAM_NAME, NAME)
+
+```
+
+### Reformat data    
+Formatting the data in 'wide' format (one column per paremeter) as shown below  
+```{r}
+
+dat <- df_chem %>%
+  select(STATION_CODE, SAMPLE_DATE, DEPTH1, PARAM_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = "PARAM_NAME", values_from = "VALUE") %>%
+  rename(StationCode = STATION_CODE, 
+         Date = SAMPLE_DATE, 
+         Depth1 = DEPTH1) %>%
+  mutate(Year = year(Date),
+         Month = month(Date),  
+         `Nitrate + ammonium` = `NO3+NO2-N` + `NH4-N`) %>%
+  arrange(StationCode, Date, Depth1)
+
+
+head(dat, 4)
+
+```
+  
+## Chl a   
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "KlfA", points = TRUE, year_by_month = TRUE)
+
+```
+
+## Nutrients  {.tabset}
+
+### NH4-N
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "NH4-N", points = TRUE, year_by_month = TRUE)
+
+```
+
+
+### NO3+NO2-N
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "NO3+NO2-N", points = TRUE, year_by_month = TRUE)
+
+```
+
+
+### TOTN
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTN", points = TRUE, year_by_month = TRUE)
+
+```
+
+
+### TOTN (old EF) 
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTN (old EF)", points = TRUE, year_by_month = TRUE)
+
+```
+
+
+### PO4-P
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "PO4-P", points = TRUE, year_by_month = TRUE)
+
+```
+
+### TOTP
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TOTP", points = TRUE, year_by_month = TRUE)
+
+```
+
+### SiO2
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "SiO2", points = TRUE, year_by_month = TRUE)
+
+```
+
+### TSM
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+stations %>% walk(plot_ctdprofile_station, data = dat, 
+                  variable = "TSM", points = TRUE, year_by_month = TRUE)
+
+```
+
+## TotN versus the sum of nitrate + ammonium    
+```{r, echo = FALSE, fig.width=10, fig.height=5.5, warning=FALSE}
+
+df_nit <- dat %>%
+  select(StationCode, Year, Month, Depth1, `Nitrate + ammonium`, TOTN, `TOTN (old EF)`) %>%
+  tidyr::pivot_longer(
+    `Nitrate + ammonium`:`TOTN (old EF)`,
+    names_to = "Parameter",
+    values_to = "Concentration")
+
+func <- function(station){
+  
+  gg <- df_nit %>%
+    filter(StationCode == station) %>%
+    ggplot(aes(Concentration, Depth1, color = Parameter)) +
+    geom_path() + geom_point() +
+    scale_y_reverse() +
+    facet_grid(rows = vars(Year), cols = vars(Month)) +
+    theme(legend.position = "bottom",
+          axis.text.x = element_text(angle = -45, hjust = 0)) +
+    labs(title = paste0(station, ", TotN versus the sum of nitrate + ammonium"))
+  print(gg)
+  
+}
+
+stations %>% walk(func)
+
+```
+
+
+
+
