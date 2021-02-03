@@ -1,5 +1,5 @@
 ---
-title: "Read ØKOKYST data from NIVAbasen"
+title: "Read ?KOKYST data from NIVAbasen"
 output: 
   html_document: 
     keep_md: yes
@@ -7,8 +7,15 @@ output:
 ---
 
 
-
-For Økokyst 2017-2019 report (Jan 2020)  However, not immediately useful, as the data in NIVAbasen seems to stop in Feb. 2018  
+- For ?kokyst 2017-2019 reports (Jan 2020)   
+- If you want updated data, it can only be used for the stations/areas where NIVA collects data (Skagerrak)  
+- For other areas, data stops in Feb. 2018 or something   
+- However, for ?kokyst quality control, we used script 12 for Skagerrak and script 13 for Norskehavet S?r 1 and 2    
+  
+**Overview**
+- Sections 1-3 makes data ready  
+- Sections 4-5 are examples  
+- Sections 6 and 7 (need only run 1-3 first) was used for checking whether TotN has gone down 20-30% after Eurofins took over TotN analyses    
 
 
 
@@ -17,7 +24,8 @@ For Økokyst 2017-2019 report (Jan 2020)  However, not immediately useful, as the
 library(dplyr)
 library(purrr)
 library(ggplot2)
-library(lubridate)
+library(lubridate)  
+library(readxl)
 
 library(niRvana)
 source("11_Read_from_Nivabasen_functions.R")
@@ -37,8 +45,8 @@ set_credentials()
 
 df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
 
-# Search for Økokyst projects
-proj_names <- grep("økokyst", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE)
+# Search for ?kokyst projects 
+proj_names <- grep("?kokyst", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE)
 
 # Filter for Skagerrak
 proj_names <- grep("skagerrak",proj_names, value = TRUE, ignore.case = TRUE)
@@ -46,7 +54,7 @@ proj_names <- grep("skagerrak",proj_names, value = TRUE, ignore.case = TRUE)
 # Add extras (KYO + indre and ytre Oslofjord)
 proj_names <- c(
   proj_names, 
-  "Nordsjøen Nord",
+  "Nordsj?en Nord",
   grep("indre oslo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE), 
   grep("ytre oslo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE), 
   grep("kyo", df_projects$PROJECT_NAME, value = TRUE, ignore.case = TRUE)
@@ -69,8 +77,10 @@ proj_id <- c(proj_id, proj_id_extra) %>% unique()
 
 
 ## 3. Get stations
-
+This gives you _many_ (1929!) stations, so we use the stations from the tender (next section) for the parts     
 ```{r}
+
+
 
 df_stations <- get_nivabase_selection(
   "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME",
@@ -107,22 +117,73 @@ nrow(df_stations)  # 1247
 # Make interactive map if you wish 
 make_map <- FALSE
 if (make_map){
-  df <- df_stations %>% filter(STATION_NAME %in% "Håøyfjorden")
+  df <- df_stations %>% filter(STATION_NAME %in% "H??yfjorden")
   library(leaflet)
   leaflet() %>%
     addTiles() %>%  # Default OpenStreetMap map tiles
     addMarkers(lng = df$LONGITUDE, lat = df$LATITUDE,
                popup = paste(df$STATION_CODE, df$STATION_NAME))
 }
+
+
 ```
+
+### Hydrography stations in tender  
+- Gives you Skagerrak sections  
+- Can skip to section 6 after this      
+```{r}
+
+fn <- "K:/Prosjekter/Sj?vann/KYSTOVERV?KING ?KOKYST/KYSTOVERV?KING ?KOKYST 2017-2020/Stasjonsoversikt/?kokyststasjoner_tilbud2016_alle.xlsx"
+
+st_hydr <- read_excel(fn, sheet = "hydrografi")
+
+df_stations_hydrografi <- df_stations %>%
+  filter(STATION_CODE %in% st_hydr$kode)
+
+# Note! Only 7 stations found, 31 NOT found
+st_hydr %>%
+  filter(kode %in% df_stations_hydrografi$STATION_CODE) %>%
+  nrow()
+st_hydr %>%
+  filter(!kode %in% df_stations_hydrografi$STATION_CODE) %>%
+  nrow()
+
+#  Check Bj?rnafjorden  
+# 5,4742	60,1043
+if (FALSE){
+  df_stations %>% filter(
+    LONGITUDE > 5.46 & LONGITUDE < 5.49 & 
+      LATITUDE > 60.09 & LATITUDE < 60.12
+  )
+}
+
+# Make interactive map if you wish 
+make_map <- TRUE
+make_map <- FALSE
+if (make_map){
+  df <- df_stations_hydrografi
+  library(leaflet)
+  leaflet() %>%
+    addTiles() %>%  # Default OpenStreetMap map tiles
+    addMarkers(lng = df$LONGITUDE, lat = df$LATITUDE,
+               popup = paste(df$STATION_CODE, df$STATION_NAME))
+}
+
+```
+
 
 ## 4. Samples from one station    
 Last date is 2.2.2018  
 With "date visualisation" (could be better using label) 
 ```{r, fig.width=8, fig.height=2}
 
+# Alt 1
 df_station <- df_stations %>% 
-  filter(STATION_NAME %in% "Håøyfjorden")
+  filter(STATION_NAME %in% "H??yfjorden")
+
+# Alt 2
+df_station <- df_stations %>% 
+  filter(STATION_CODE %in% "VT67")
 
 station_id <- unique(df_station$STATION_ID)
 
@@ -148,10 +209,11 @@ df %>%
 
 ## 5. Data from one date  
 ```{r}
+
 unique(df_samples$SAMPLE_DATE) %>% tail(5)
 
 sample_date <- df_samples %>%
-  filter(floor_date(SAMPLE_DATE, "days") == ymd("2018-02-02")) %>%
+  filter(floor_date(SAMPLE_DATE, "days") == ymd("2019-11-13")) %>%
   pull(SAMPLE_DATE) %>%
   unique()
 
@@ -173,20 +235,24 @@ df_data <- df_data %>%
   left_join(df_methods) %>%
   left_join(df_samples)
 
+nrow(df_data)
+
   
 ```
 
 ### Plot data from this date  
 ```{r}
-
-ggplot(df_data, aes(VALUE, DEPTH1)) + 
+df_data %>%
+  arrange(NAME, DEPTH1) %>%
+  ggplot(aes(VALUE, DEPTH1)) + 
+  geom_path() +
   geom_point(size = 0.5) +
   scale_y_reverse() +
-  facet_wrap(vars(NAME))
+  facet_wrap(vars(NAME), scales = "free_x")
 
 ```
 
-## Get data for this station, 2016 - 2018  
+### Get data for this station, 2016 - 2018  
 Using function get_data_given_date()
 ```{r}
 
@@ -200,16 +266,426 @@ dat <- get_data_given_date(sample_dates, df_samples, df_methods)
 
 ```
 
-### Plot
+### Plot all profiles  
 ```{r}
 dat %>%
-  filter(NAME %in% "Saltholdighet") %>%
+  filter(NAME %in% "Nitritt + nitrat") %>%
   mutate(Date = as.character(round_date(SAMPLE_DATE, "day"))) %>%
+  arrange(Date, DEPTH1) %>%
   ggplot(aes(VALUE, DEPTH1, color = Date)) + 
+  geom_path() +
   geom_point(size = 0.5) +
   scale_y_reverse() 
   # facet_wrap(vars(Date))
 
 ```
+
+
+## 6 Check Tot-N before/after 1. Nov. 2018  
+- In order to compare before/after starting using Eurofins  
+- Use all data from stations with data in 2019  
+  
+### Get all samples  
+```{r}
+# Test one station:
+# df <- get_samples_onestation("VT67")
+# df <- get_samples_onestation("VR51")
+# df <- get_samples_onestation("VR51", depth1 = c(0,5,10,20,30))
+# nrow(df)
+
+station_codes <- unique(df_stations_hydrografi$STATION_CODE)
+
+# Get list of data frames (one per station)  
+df_samples_list <- station_codes %>% 
+  map(
+    get_samples_onestation,
+    depth1 = c(0,5,10,20,30,50,100,200,300,400),     # nutrient depths + some  
+    date_from = "01-01-2010")
+
+# Check which have data  
+not_ok <- df_samples_list %>% map_lgl(is.null) 
+
+# Combine results
+df_samples <- bind_rows(df_samples_list[!not_ok])
+
+
+ggplot(df_samples, aes(x = SAMPLE_DATE, y = STATION_CODE)) +
+  geom_point() +
+  geom_vline(xintercept = ymd_hms("2014-01-01 00:00:00"), linetype = 2)
+
+
+```
+
+### Get all data  
+```{r}  
+sample_ids <- df_samples %>% 
+  filter(SAMPLE_DATE > ymd("2000-01-01")) %>% 
+  pull(WATER_SAMPLE_ID) %>% 
+  unique()
+
+df_data <- get_nivabase_selection(
+  "WATER_SAMPLE_ID, METHOD_ID, VALUE, UNCERTAINTY, FLAG1, FLAG2, REMARK",
+  "WATER_CHEMISTRY_VALUES",
+  "WATER_SAMPLE_ID",
+  sample_ids 
+)   
+
+df_methods <- get_nivabase_selection(
+  "METHOD_ID, NAME, UNIT, BASIS_ID",
+  "METHOD_DEFINITIONS",
+  "METHOD_ID",
+  unique(df_data$METHOD_ID) 
+)   
+
+df_data <- df_data %>% 
+  left_join(df_methods, by = "METHOD_ID") %>%
+  left_join(df_samples, by = "WATER_SAMPLE_ID")
+
+nrow(df_data)  # 13202
+
+table(df_data$STATION_CODE)
+
+
+```
+
+### Overwrite existing plot files?  
+```{r}
+overwrite_plots <- FALSE
+```
+
+
+### Plot TOTN
+
+```{r, fig.width=8, fig.height=8}
+
+gg <- df_data %>%
+  filter(NAME %in% "Total nitrogen") %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT2","VT3","VT10")) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Total N (fig. a)", y = "Total N")
+
+if (overwrite_plots)
+  ggsave("Figures/11_06_TotN_a.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+```
+
+```{r, fig.width=8, fig.height=8}
+
+gg <- df_data %>%
+  filter(NAME %in% "Total nitrogen") %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT65","VT66","VT67")) %>%  
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Total N (fig. b)", y = "Total N")
+
+if (overwrite_plots)
+  ggsave("Figures/11_06_TotN_b.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+```
+
+### Calculate ratio inorg. N / TotN
+```{r}
+df_nitrogen <- df_data %>%
+  select(STATION_CODE, SAMPLE_DATE, DEPTH1, NAME, VALUE) %>%
+  filter(NAME %in% c("Total nitrogen", "Nitritt + nitrat", "Ammonium")) %>%
+  tidyr::pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(Inorg_N = `Nitritt + nitrat` + `Ammonium`,
+         Ratio_inorg_tot = Inorg_N/`Total nitrogen`) %>%
+  arrange(STATION_CODE, SAMPLE_DATE, DEPTH1)
+
+df_nitrogen  
+
+```
+
+### Plot ratio inorg. N / TotN
+
+```{r, fig.width=8, fig.height=8}
+
+gg <- df_nitrogen %>%
+  filter(STATION_CODE %in% c("VT2","VT3","VT10")) %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  ggplot(aes(SAMPLE_DATE, Ratio_inorg_tot, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Ratio inorganic N / total N (fig. a)", y = "Ratio inorganic N / total N")
+  
+if (overwrite_plots)
+  ggsave("Figures/11_06_Nratio_a.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+```
+
+
+```{r, fig.width=8, fig.height=8}
+
+gg <- df_nitrogen %>%
+  filter(STATION_CODE %in% c("VT65","VT66","VT67")) %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  ggplot(aes(SAMPLE_DATE, Ratio_inorg_tot, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Ratio inorganic N / total N (fig. b)", y = "Ratio inorganic N / total N")
+  
+if (overwrite_plots)
+  ggsave("Figures/11_06_Nratio_b.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+```
+
+### Calculate ratio TOC / TotN  
+Mainly data at VT3
+```{r}
+df_data %>%
+  filter(NAME %in% c("L?st organisk karbon", "Partikul?rt organisk karbon")) %>%
+  xtabs(~year(SAMPLE_DATE) + STATION_CODE, .)
+
+df_toc_nitrogen <- df_data %>%
+  filter(STATION_CODE %in% "VT3") %>%
+  select(STATION_CODE, SAMPLE_DATE, DEPTH1, NAME, VALUE) %>%
+  filter(NAME %in% c("Total nitrogen", "L?st organisk karbon", "Partikul?rt organisk karbon")) %>%
+  tidyr::pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(TOC = `L?st organisk karbon` + `Partikul?rt organisk karbon`,
+         Ratio_TOC_TotN= TOC/`Total nitrogen`) %>%
+  arrange(STATION_CODE, SAMPLE_DATE, DEPTH1) 
+
+df_toc_nitrogen  
+
+```
+
+### Plot   
+```{r}
+gg <- df_toc_nitrogen %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(!is.na(Ratio_TOC_TotN)) %>%
+  ggplot(aes(SAMPLE_DATE, Ratio_TOC_TotN, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-09-01 00:00:00"), linetype = 2) +
+  labs(title = "Ratio TOC / total N", y = "Ratio TOC / total N")
+  
+if (overwrite_plots)
+  ggsave("Figures/11_07_Nratio_b.png", gg, width = 8, height = 6, dpi = 400)
+
+gg
+
+```
+
+
+## 7 Check longer time scales  
+
+### Tables  
+Using same df_data
+```{r}
+xtabs(~NAME + year(SAMPLE_DATE), df_data)
+
+df_data %>% 
+  filter(NAME %in% c("Total nitrogen", "Total nitrogen (Tot-N)", "TOTN")) %>%
+  xtabs(~STATION_CODE + year(SAMPLE_DATE), .)
+
+df_data %>% 
+  filter(NAME %in% c("Total nitrogen", "Total nitrogen (Tot-N)", "TOTN")) %>%
+  xtabs(~NAME + STATION_CODE, .)
+
+
+```
+
+```{r}
+gg <- df_data %>%
+  filter(NAME %in% "Total nitrogen") %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT2","VT3","VT10")) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Total N (fig. a)", y = "Total N") +
+
+```
+
+```{r}
+df_data %>%
+  count(NAME, UNIT)
+
+```
+
+### TOT-N time series  
+```{r}
+
+df <- df_data %>%
+  mutate(
+    NAME2 = case_when(
+      NAME %in% c("Total nitrogen", "Total nitrogen (Tot-N)", "TOTN") ~ "Total nitrogen",
+      TRUE ~ NAME
+    ),
+    VALUE = case_when(
+      UNIT %in% c("? mol/l", "?M") ~ VALUE/0.07139,
+      TRUE ~ VALUE
+    )
+  ) %>%
+  select(STATION_CODE, SAMPLE_DATE, DEPTH1, NAME, NAME2, VALUE) %>%
+  filter(STATION_CODE %in% c("VT10","VT67")) %>%
+  filter(NAME2 %in% "Total nitrogen") %>%
+  mutate(Depth = factor(DEPTH1))
+
+df_table1 <- df %>%
+  filter(DEPTH1 >= 0 & DEPTH1 <= 10) %>%
+  group_by(STATION_CODE, Year = year(SAMPLE_DATE)) %>%
+  summarise(TotN = mean(VALUE) %>% round(0)) %>%
+  arrange(STATION_CODE, Year)
+
+df_table1
+
+
+df_table2 <- df %>%
+  filter(DEPTH1 >= 0 & DEPTH1 <= 10) %>%
+  group_by(STATION_CODE, Year = year(SAMPLE_DATE), Month = month(SAMPLE_DATE)) %>%
+  summarise(TotN = mean(VALUE) %>% round(0)) %>%
+  pivot_wider(names_from = Month, values_from = TotN) %>%
+  select(STATION_CODE, Year, as.character(1:12)) %>%
+  arrange(STATION_CODE, Year)
+
+df_table2
+
+openxlsx::write.xlsx(list(Annual_average = df_table1,
+                          Monthly_average = df_table2),
+                     "Figures/11_07_TotN.xlsx")
+
+```
+
+### Plot  
+```{r}
+
+gg <- df %>%
+  mutate(Month = month(SAMPLE_DATE)) %>%
+  filter(STATION_CODE == "VT67" & DEPTH1 <= 30 & Month %in% 3:10) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(Month)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Total N (fig. a)", y = "Total N")
+
+
+# ggsave("Figures/11_06_TotN_a.png", gg, width = 8, height = 8, dpi = 400)
+
+ gg  
+
+```
+
+
+## 8 Other plots  
+  
+### Chl a  
+
+```{r, fig.width=8, fig.height=8}
+overwrite_plots <- TRUE 
+
+#
+# All stations (the 3 first), since 2016
+# 
+gg <- df_data %>%
+  filter(NAME %in% c("Klorofyll a", "Klorofyll A")) %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT2","VT3","VT10")) %>%
+  filter(year(SAMPLE_DATE) >= 2016) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Chlorophyll a (fig. a)", y = "Chlorophyll a")
+
+if (overwrite_plots)
+  ggsave("Figures/11_08_Chla_a.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+#
+# All stations (the 3 last), since 2016
+# 
+gg <- df_data %>%
+  filter(NAME %in% c("Klorofyll a", "Klorofyll A")) %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT65","VT66","VT67")) %>%  
+  filter(year(SAMPLE_DATE) >= 2016) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Chlorophyll a (fig. b)", y = "Chlorophyll a")
+
+if (overwrite_plots)
+  ggsave("Figures/11_08_Chlb_b.png", gg, width = 8, height = 8, dpi = 400)
+
+gg
+
+
+#
+# The two stations with longer time series, since 2010
+# 
+gg <- df_data %>%
+  filter(NAME %in% c("Klorofyll a", "Klorofyll A")) %>%
+  mutate(Depth = factor(DEPTH1)) %>%
+  filter(STATION_CODE %in% c("VT10", "VT67")) %>%
+  ggplot(aes(SAMPLE_DATE, VALUE, color = Depth)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(Depth), vars(STATION_CODE)) +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  geom_vline(xintercept = ymd_hms("2018-11-01 00:00:00"), linetype = 2) +
+  labs(title = "Chlorophyll a (fig. c)", y = "Chlorophyll a")
+
+if (overwrite_plots)
+  ggsave("Figures/11_08_Chla_c.png", gg, width = 8, height = 8, dpi = 400)
+
+
+overwrite_plots <- FALSE 
+
+gg
+
+```
+
+
 
 
