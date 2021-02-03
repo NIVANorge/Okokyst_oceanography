@@ -1,0 +1,362 @@
+---
+title: "QA for CTDs in Hardanger + Sognefjord - ØKOKYST 2019 report"
+author: "DHJ"
+date: "13 1 2020"
+output:
+  html_document:
+    keep_md: true
+    toc: true
+    toc_float: true
+
+---
+
+## QC done January 2021    
+- CTDs with salinity + temp + oxygen      
+- Excel files from Trond Kristansen's dropbox (29.01.2021)
+- Stations:    
+    * VT53 - Hardangerfjorden  
+    * VT69 - Hardangerfjorden  
+    * VT70 - Hardangerfjorden  
+    * VT74 - Hardangerfjorden  
+    * VT16 - Sognefjorden  
+    * VT79 - Sognefjorden  
+
+    
+```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
+
+## 1. Libraries
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(RColorBrewer)
+library(knitr)
+library(kableExtra)
+
+# library(niRvana)
+
+source("12_QA_2019_from_excel_functions.R")
+source("13_QA_CTD_2019_functions.R")
+
+# RColorBrewer::display.brewer.all()
+
+knitr::opts_chunk$set(echo = FALSE, results = 'hold')
+
+```
+
+
+## 1. Read files   
+
+### New data (2020)  
+- Read from excel files in folders under `K:/Avdeling/214-Oseanografi/DATABASER/OKOKYST_2017s`  
+- 3 files in 3 separate folders in this case    
+```{r, echo = FALSE, results = 'hide', message = FALSE}
+
+# datafolder <- "K:/Prosjekter/!!! Tiltaksrettet industriovervåkning iht. vannforskriften/16371 - Yara Glomfjorden (tidl.14380)/_2019/Vannsøyle/xlsbase/TilAquamonitor"
+
+
+read_excel_files <- FALSE
+read_excel_files <- TRUE
+
+if (read_excel_files){
+  
+  # Files from Trond Kristansen's dropbox (29.01.2021)
+  
+  datafolder <- "Datasett/Sognefjorden_2020"
+  fns <- dir(datafolder)
+  fns <- fns[!grepl("~", fns)]
+
+  read_excel_add_filename <- function(filename, folder){
+    fn <- paste0(folder, "/", filename)
+    read_excel(fn, na = "-999") %>%
+      mutate(Filename = filename)
+  }
+
+  dat <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder) %>%
+    mutate(Date = as.Date(Date, origin = "1899-12-30")) %>%
+    mutate(StationCode2 = paste0(sub("_CTD.xlsx", "", Filename, fixed = TRUE), "_", StationCode),
+           StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE)
+    )
+  
+
+  saveRDS(dat, "Data/14_QA_CTD_2020_Sognefjorden.rds")
+  
+} else {
+  
+  dat <- readRDS("Data/14_QA_CTD_2020_Sognefjorden.rds")
+  
+}
+
+xtabs(~addNA(StationCode), dat)
+xtabs(~addNA(Date), dat)
+
+```
+
+### Old data (2017-2019)    
+```{r, message = FALSE}
+# if (FALSE){
+
+datafolder <- "Datasett/Sognefjorden_2019"
+fns <- dir(datafolder)
+
+dat_old <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder) %>%
+  mutate(Date = as.Date(Date, origin = "1899-12-30")) %>%
+  mutate(StationCode2 = paste0(sub("_CTD.xlsx", "", Filename, fixed = TRUE), "_", StationCode),
+         StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE)
+  )
+
+#  
+
+cat(nrow(dat_old), "records \n")
+
+  
+sel <- dat_old$Oksygen < -100
+dat_old$Oksygen[sel] <- NA
+
+cat(sum(sel, na.rm = TRUE), "records with oxygen < -100 deleted \n")
+
+  
+if (FALSE){
+  # check dates
+  
+  cat("-------------------------------------------------------------------------------------- \n")
+  cat("dat_old: \n")
+  cat("-------------------------------------------------------------------------------------- \n")
+  # xtabs(~addNA(Date), dat_old)
+  xtabs(~addNA(Date) + StationCode, dat_old)
+  
+  cat("-------------------------------------------------------------------------------------- \n")
+  cat("dat: \n")
+  cat("-------------------------------------------------------------------------------------- \n")
+  # xtabs(~addNA(Date), dat)
+  xtabs(~addNA(Date) + StationCode, dat)
+
+  # xtabs(~StationCode2, dat_old)
+  # xtabs(~StationCode2, dat)
+  
+}
+  
+
+```
+
+
+## 2. Data       
+
+### Check sample dates   
+- `dat_old`= 2017-2019   
+- `dat` = last part of 2019 + 2020  
+```{r}
+
+tab <- xtabs(~Date, dat_old)
+missing <- is.na(dat$Date)
+cat("-------------------------------------------------------------------------------------- \n")
+cat("dat_old: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+cat("Number of dates: ", length(tab), "\n")
+cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
+cat("Missing dates: ", sum(missing), "\n")
+  
+
+tab <- xtabs(~Date, dat)
+missing <- is.na(dat$Date)
+cat("-------------------------------------------------------------------------------------- \n")
+cat("dat: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+cat("Number of dates: ", length(tab), "\n")
+cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
+cat("Missing dates: ", sum(missing), "\n")
+  
+```
+
+
+### Dates and max depth of new data    
+```{r, results='asis'}
+
+dat %>%
+  group_by(StationCode, Date) %>%
+  summarize(n = n(), Max_depth = max((Depth1 + Depth2)/2, na.rm = TRUE),
+            .groups = "drop") %>%
+  arrange(StationCode, Date) %>%
+  kbl() %>%
+  kable_styling(bootstrap_options = "striped", full_width = F, position = "left")
+
+# dat %>%
+#   count(SampleDate)
+# 
+# dat %>%2
+#   count(StationCode, Date)
+
+stations <- dat %>%
+  count(StationCode) %>%
+  pull(StationCode  )
+
+```
+
+
+## 3. Profiles of 2020 data  
+
+### Salinity  
+_NOTE: also see plots for top 20 m further down._  
+   
+- VT16: 
+    - Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
+    - July 2020: something is wrong with this, check temperature and oxygen saturation   
+- VT16: Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
+
+   
+
+
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+# Test one station:
+# plot_ctdprofile_station("VT16", data = dat, variable = "Saltholdighet", points = FALSE)
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat, variable = "Saltholdighet", points = FALSE)
+
+
+# stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Saltholdighet", points = FALSE)
+
+```
+
+### Salinity top 50 m 
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+dat50m <- dat %>% filter(Depth1 <= 50)
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat50m, variable = "Saltholdighet", points = FALSE)
+
+
+```
+
+
+### Temperature    
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat, variable = "Temperatur", points = FALSE)
+
+
+```
+
+### Temperature top 50 m 
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat50m, variable = "Temperatur", points = FALSE)
+
+```
+
+### Oxygen volume      
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat, variable = "Oksygen", points = FALSE)
+
+```
+
+### Oxygen saturation        
+```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
+
+stations %>% walk(
+  plot_ctdprofile_station,
+  data = dat, variable = "Oksygenmetning", points = FALSE)
+
+
+```
+
+
+
+
+## 4. Times series (since 2017)  
+
+### Combined data
+```{r}
+
+dat2 <- bind_rows(dat_old, dat)
+
+# xtabs(~addNA(Date), dat2)
+
+dat2 %>%
+  distinct(Date, StationCode) %>%
+  mutate(Year = year(Date)) %>%
+  xtabs(~Year + addNA(StationCode), .)
+
+# dat3b
+
+```
+
+### All stations  
+```{r}
+
+  
+  # df <- df_chem %>%
+  #   distinct(STATION_CODE, PARAM_NAME) 
+  # 
+  # walk2(
+  #   df$STATION_CODE[1:3],
+  #   df$PARAM_NAME[1:3],
+  #   ~plot_ctdprofile_station(stationcode = .x, 
+  #                            variable = .y,
+  #                            data = dat, 
+  #                            points = TRUE, year_by_month = TRUE)
+  
+
+
+```
+
+### Station VT16       
+```{r}
+
+if (FALSE){
+  # check depths
+  dat2 %>%
+    filter(StationCode %in% "VT16") %>%
+    group_by(Date) %>%
+    summarize(Max_depth = max(Depth1)) %>%
+    arrange(Max_depth)
+}
+
+# debugonce(plot_timeseries_station)
+plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Oksygenmetning", titletext = "")
+
+```
+
+
+### Station VT79       
+```{r}
+
+if (FALSE){
+  # check depths
+  dat2 %>%
+    filter(StationCode %in% "VT79") %>%
+    group_by(Date) %>%
+    summarize(Max_depth = max(Depth1)) %>%
+    arrange(Max_depth)
+}
+
+# debugonce(plot_timeseries_station)
+plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Oksygenmetning", titletext = "")
+
+```
+
+
+
+
+
+
