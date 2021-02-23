@@ -1,6 +1,11 @@
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # FUNCTIONS FOR CHECKING EXCEL FILES ---- 
 # Checking file names, sheet names and variable names
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
 #
 # All outputs contains "folder" in a data frame variable, 
 #   but to avoid exceedingly long folder names, one may use the "base folder" 
@@ -163,9 +168,11 @@ get_stations <- function(file_number, df_fileinfo = fileinfo,
 # get_stations(4)
 
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # FUNCTIONS FOR READING DATA ----
 #
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 
 #
@@ -215,9 +222,11 @@ read_excel_til_AqM <- function(fn, sheetname, first_data_row = 5,
 # test <- read_excel_til_AqM(fn, "CTD")
 
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # FUNCTIONS FOR CTD QC ----
 #
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 #
 # Plot cast (i.e. Depth along each profile)
@@ -311,7 +320,7 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
   if (nrow(df) > 0){
     gg <- df %>%
       mutate(Date = factor(Date)) %>%
-      ggplot(aes(.data[[variable]], Depth1)) +
+      ggplot(aes(.data[[variable]], Depth1, group = Date)) +
       geom_path() +
       scale_y_reverse() + 
       labs(title = paste(titletext, stationcode, " - ", variable),
@@ -488,5 +497,149 @@ plot_timeseries_all <- function(variable, df_fileinfo_stations = fileinfo_statio
 # plot_timeseries_all("Saltholdighet")
 
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# FUNCTIONS FOR COMPARING DATA FRAMES ----
+#
+# Building on package 'compareDF'  
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+#
+# Get differences for a single variable
+# - Returns a data set wth one column and 10 rows (see row names given in function)
+# - Also handles non-numeric rows  
+# - For use within get_differences_variables()
+# 
+
+
+#
+get_differences_one_variable <- function(comparison_output, var){
+  
+  changes <- table(comparison_output$comparison_df$chng_type)
+  if (changes["+"] != changes["-"])
+    stop("Function works only for data frames with same number of rows and the same grouping variables. Sorry.")
+  
+  # NOTE TO SELF: should probably do something like this instead of matrix(ncol = 2)
+  # df <- ctab2$comparison_df[c("Depth1", "chng_type", "Oksygen")] %>% 
+  #   pivot_wider(names_from = "chng_type", values_from = "Oksygen")
+  
+  
+  result <- data.frame(
+    x = rep(NA, 10)
+  )
+  names(result) <- var
+  row.names(result) <- c(
+    "NA_in_both",
+    "NA_only_in_1",
+    "NA_only_in_2",
+    "Different_value",
+    "Highest_in_1",
+    "Highest_in_2",
+    "Highest_in_1_meandiff",
+    "Highest_in_2_meandiff",
+    "Highest_in_1_maxdiff",
+    "Highest_in_2_maxdiff"
+  )
+  
+  # Actual values
+  tab <- comparison_output$comparison_df[[var]] %>% 
+    matrix(ncol = 2, byrow = TRUE)
+  # head(tab)
+  result["NA_in_both",] <- sum(is.na(tab[,1]) & is.na(tab[,2]))    # Number of NAs in df1 + df2
+  result["NA_only_in_1",] <- sum(is.na(tab[,1]) > is.na(tab[,2]))  # Number of NAs in df1
+  result["NA_only_in_2",] <- sum(is.na(tab[,1]) < is.na(tab[,2]))  # Number of NAs in df2
+  
+  # Where values in both tables  
+  sel_notNA <- !is.na(tab[,1]) & !is.na(tab[,2])
+  
+  # Pick rows with difference in values  
+  sel_different <- tab[sel_notNA,1] != tab[sel_notNA,2]
+  result["Different_value",] <- sum(sel_different)    # Number of rows where df1 > df2  
+  
+  # For numeric variables only
+  if (mode(comparison_output$comparison_df[[var]]) == "numeric"){
+    
+    # Pick rows with specific difference in values  
+    sel_highest_is_1 <- tab[sel_notNA,1] > tab[sel_notNA,2]
+    sel_highest_is_2 <- tab[sel_notNA,1] < tab[sel_notNA,2]
+    result["Highest_in_1",] <- sum(sel_highest_is_1)    # Number of rows where df1 > df2  
+    result["Highest_in_2",] <-sum(sel_highest_is_2)    # Number of rows where df2 > df1  
+    
+    # Make table for vales with differences
+    tab_highest_is_1 <- tab[sel_notNA,][sel_highest_is_1,] %>% matrix(ncol = 2)
+    tab_highest_is_2 <- tab[sel_notNA,][sel_highest_is_2,] %>% matrix(ncol = 2)
+    
+    # Difference where 1 is highest, every difference (may be long)
+    # apply(tab_highest_is_1, 1, diff) 
+    
+    # Mean differences
+    if (sum(tab_highest_is_1) > 0){
+      result["Highest_in_1_meandiff",] <- apply(tab_highest_is_1, 1, diff) %>% mean()
+      result["Highest_in_1_maxdiff",] <- apply(tab_highest_is_1, 1, diff) %>% min()
+    }
+    if (sum(tab_highest_is_2) > 0){
+      result["Highest_in_2_meandiff",] <- apply(tab_highest_is_2, 1, diff) %>% mean()
+      result["Highest_in_2_maxdiff",] <- apply(tab_highest_is_2, 1, diff) %>% max()
+    }
+
+  }
+  
+  result
+  
+}
+
+# TEST
+if (FALSE){
+  
+  library(compareDF)
+  
+  # Two versions of same data
+  df1 <-   dat     %>% filter(StationCode %in% "VT69")
+  df2 <-   dat_old %>% filter(StationCode %in% "VT69") 
+  
+  # Group on date and depth - create_output_table gives much better input  
+  ctab2 <- compare_df(df1, df2, c("Date", "Depth1"))
+  
+  get_differences_one_variable(ctab2, "Temperatur")
+  get_differences_one_variable(ctab2, "Oksygen")
+  get_differences_one_variable(ctab2, "Metode")
+
+  
+}
+
+
+#
+# Get differences for a data frame, by variables  
+# - Returns a data set wth one column and 10 rows (see row names given in function)
+# - Also handles non-numeric rows  
+# - For use within get_differences_variables()
+# 
+
+get_differences_by_variable <- function(comparison_output){
+  
+  vars <- names(comparison_output$comparison_df)
+  vars <- vars[!vars %in% c("grp","chng_type","...3")]
+  
+  vars %>% purrr::map_dfc(
+    ~get_differences_one_variable( 
+      comparison_output = comparison_output,
+      var = .x)
+  )
+  
+}
+
+# TEST
+if (FALSE) {
+  
+  # Two versions of same data
+  df1 <-   dat     %>% filter(StationCode %in% "VT69")
+  df2 <-   dat_old %>% filter(StationCode %in% "VT69") 
+  
+  # Group on date and depth - create_output_table gives much better input  
+  ctab2 <- compare_df(df1, df2, c("Date", "Depth1"))
+  
+  get_differences_by_variable(ctab2)
+  
+}
 
