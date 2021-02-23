@@ -63,7 +63,7 @@ read_excel_files <- TRUE
 
 if (read_excel_files){
   
-  # Files from Trond Kristansen's dropbox (29.01.2021)
+  # Files from Trond Kristansen's dropbox (20.02.2021)
   
   datafolder <- "Datasett/Sognefjorden_2020"
   fns <- dir(datafolder, pattern = ".xlsx")
