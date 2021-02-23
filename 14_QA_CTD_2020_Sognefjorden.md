@@ -2,11 +2,17 @@
 title: "QA for CTDs in Hardanger + Sognefjord - ØKOKYST 2019 report"
 author: "DHJ"
 date: "13 1 2020"
+always_allow_html: true
 output:
+  github_document:
+    toc: true
   html_document:
     keep_md: true
     toc: true
     toc_float: true
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding,
+  output_format = "all") }) 
 
 ---
 
