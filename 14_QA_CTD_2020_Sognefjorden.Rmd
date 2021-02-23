@@ -66,7 +66,7 @@ if (read_excel_files){
   # Files from Trond Kristansen's dropbox (29.01.2021)
   
   datafolder <- "Datasett/Sognefjorden_2020"
-  fns <- dir(datafolder)
+  fns <- dir(datafolder, pattern = ".xlsx")
   fns <- fns[!grepl("~", fns)]
 
   read_excel_add_filename <- function(filename, folder){
@@ -202,11 +202,8 @@ stations <- dat %>%
 _NOTE: also see plots for top 20 m further down._  
    
 - VT16: 
-    - Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
-    - July 2020: something is wrong with this, check temperature and oxygen saturation   
-- VT16: Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
-
-   
+    - A bit shallow CTDs in Dec 2019 and Feb 2020    
+    - July 2020 fixed since last version
 
 
 ```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}

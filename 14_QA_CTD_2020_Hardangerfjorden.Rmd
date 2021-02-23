@@ -62,10 +62,10 @@ read_excel_files <- TRUE
 
 if (read_excel_files){
   
-  # Files from Trond Kristansen's dropbox (29.01.2021)
+  # Files from Trond Kristansen's dropbox (20.02.2021)
   
   datafolder <- "Datasett/Hardangerfjorden_2020"
-  fns <- dir(datafolder)
+  fns <- dir(datafolder, pattern = ".xlsx")
   fns <- fns[!grepl("~", fns)]
 
   read_excel_add_filename <- function(filename, folder){
@@ -94,37 +94,140 @@ xtabs(~addNA(Date), dat)
 
 ```
 
-### Old data (2017-2019)    
-```{r, message = FALSE}
-# if (FALSE){
+#### Compare with old versions
 
-  datafolder <- "Datasett/Hardangerfjorden_2019"
-  fns <- dir(datafolder)
+```{r}
+
+
+if (FALSE){
   
+  # install.packages("compareDF")
+  library(compareDF)
+
+  # Files from "Old_version" (from Trond 29.01.2021)
+  datafolder <- "Datasett/Hardangerfjorden_2020/Old_version/"
+  fns <- dir(datafolder, pattern = ".xlsx")
+  fns <- fns[!grepl("~", fns)]
+
+  read_excel_add_filename <- function(filename, folder){
+    fn <- paste0(folder, "/", filename)
+    read_excel(fn, na = "-999") %>%
+      mutate(Filename = filename)
+  }
+
   dat_old <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder) %>%
     mutate(Date = as.Date(Date, origin = "1899-12-30")) %>%
     mutate(StationCode2 = paste0(sub("_CTD.xlsx", "", Filename, fixed = TRUE), "_", StationCode),
            StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE)
     )
   
+  #
+  # 1. Compare the whole thing using compareDF::compare_df
+  #
+  # Should have used Depth1 as grouping as well, but anyway this is too big
+  #
+  ctab <- compare_df(dat, dat_old, c("StationCode", "Date"))
   
-  # check dates
+  # Summaries not very informative  
+  # ctab$change_count
+  ctab$change_summary
+  # create_output_table(ctab)  # doesnt make much sense as Depth1 is not included
   
-  cat("-------------------------------------------------------------------------------------- \n")
-  cat("dat_old: \n")
-  cat("-------------------------------------------------------------------------------------- \n")
-  # xtabs(~addNA(Date), dat_old)
-  xtabs(~addNA(Date) + StationCode, dat_old)
+  #
+  # 2. Using table() to get an overview on "number of rows" basis
+  #
+  # Easier to see why there is a difference in no. of records form this:
+  #
+  tab1 <- dat %>% xtabs(~Date + StationCode, .)
+  tab2 <- dat_old %>% xtabs(~Date + StationCode, .)
+  tab1 - tab2   
+  # - shows that 1 record has been added to VT53 for every date  
   
-  cat("-------------------------------------------------------------------------------------- \n")
-  cat("dat: \n")
-  cat("-------------------------------------------------------------------------------------- \n")
-  # xtabs(~addNA(Date), dat)
-  xtabs(~addNA(Date) + StationCode, dat)
+  #
+  # 3. Check one station with *same* number of records   
+  #
+  # - using compareDF::compare_df plus self-made get_differences_by_variable()
+  #
+  
+  # When using View() for both it is easier to see that the chnages are
+  # 1) Row 3 have values for the 4 main sensors in df1, these are NA in version 2
+  # 2) Oksygen: changed values
+  df1 <-   dat     %>% filter(StationCode %in% "VT69")
+  df2 <-   dat_old %>% filter(StationCode %in% "VT69") 
+  
+  # Group on date and depth - create_output_table gives much better input  
+  ctab2 <- compare_df(df1, df2, c("Date", "Depth1"))
+  # ctab2$change_count       
+  ctab2$change_summary     
+  create_output_table(ctab2)  # useful output but very long output
+  
+  # Easily see that the biggeste differences are for "Oksygen"
+  get_differences_by_variable(ctab2)
+  
+  #
+  # Check one station with *different* number of records   
+  #
+  # - using compareDF::compare_df plus self-made get_differences_by_variable()
+  # - get_differences_by_variable() doesn't yet handle different number of rows.,, 
+  #
+  
+  df1 <-   dat     %>% filter(StationCode %in% "VT53" & Date == dat$Date[1]) 
+  df2 <-   dat_old %>% filter(StationCode %in% "VT53" & Date == dat$Date[1]) 
+  
+  # tail(df1)
+  # tail(df2)
+  
+  # As "get_differences_one_variable" is now, we need to do this:
+  df1 <- head(df1,-1)   # adjust length so they are equally long
+  
+  # seems ok:
+  sum(df1$Depth1 != df2$Depth1)
+  
+  # Group on date and depth - create_output_table gives much better input  
+  ctab3 <- compare_df(df1, df2, c("Date", "Depth1"))
+  ctab3$change_summary     
+  
+  get_differences_by_variable(ctab3)
+  
+}
 
-  xtabs(~StationCode2, dat_old)
-  xtabs(~StationCode2, dat)
-  
+
+```
+
+
+
+### Older data (2017-2019)  
+
+```{r, message = FALSE}
+# if (FALSE){
+
+datafolder <- "Datasett/Hardangerfjorden_2019"
+fns <- dir(datafolder)
+
+dat_old <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder) %>%
+  mutate(Date = as.Date(Date, origin = "1899-12-30")) %>%
+  mutate(StationCode2 = paste0(sub("_CTD.xlsx", "", Filename, fixed = TRUE), "_", StationCode),
+         StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE)
+  )
+
+
+# check dates
+
+cat("-------------------------------------------------------------------------------------- \n")
+cat("dat_old: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+# xtabs(~addNA(Date), dat_old)
+xtabs(~addNA(Date) + StationCode, dat_old)
+
+cat("-------------------------------------------------------------------------------------- \n")
+cat("dat: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+# xtabs(~addNA(Date), dat)
+xtabs(~addNA(Date) + StationCode, dat)
+
+xtabs(~StationCode2, dat_old)
+xtabs(~StationCode2, dat)
+
 #}
 
 ```
@@ -137,15 +240,16 @@ xtabs(~addNA(Date), dat)
 - `dat` = last part of 2019 + 2020  
 ```{r}
 
-tab <- xtabs(~Date, dat_old)
-missing <- is.na(dat$Date)
-cat("-------------------------------------------------------------------------------------- \n")
-cat("dat_old: \n")
-cat("-------------------------------------------------------------------------------------- \n")
-cat("Number of dates: ", length(tab), "\n")
-cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
-cat("Missing dates: ", sum(missing), "\n")
-  
+if (TRUE){
+  tab <- xtabs(~Date, dat_old)
+  missing <- is.na(dat$Date)
+  cat("-------------------------------------------------------------------------------------- \n")
+  cat("dat_old: \n")
+  cat("-------------------------------------------------------------------------------------- \n")
+  cat("Number of dates: ", length(tab), "\n")
+  cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
+  cat("Missing dates: ", sum(missing), "\n")
+}
 
 tab <- xtabs(~Date, dat)
 missing <- is.na(dat$Date)
@@ -240,6 +344,9 @@ stations %>% walk(
 ```
 
 ### Oxygen volume      
+
+Somewhat noisy, e.g. April in VT70
+
 ```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
 
 stations %>% walk(

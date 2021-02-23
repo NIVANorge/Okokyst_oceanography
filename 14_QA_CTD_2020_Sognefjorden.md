@@ -56,8 +56,8 @@ output:
 ## -------------------------------------------------------------------------------------- 
 ## dat: 
 ## -------------------------------------------------------------------------------------- 
-## Number of dates:  12 
-## First and last date:  2019-12-15 - 2020-11-10 
+## Number of dates:  13 
+## First and last date:  2019-12-15 - 2020-12-10 
 ## Missing dates:  0
 ```
 
@@ -76,140 +76,158 @@ output:
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2019-12-15 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-01-19 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-02-19 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-03-12 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-04-14 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-05-13 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-06-14 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-07-15 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-08-16 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-09-13 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-10-18 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT16 </td>
    <td style="text-align:left;"> 2020-11-10 </td>
+   <td style="text-align:right;"> 1280 </td>
    <td style="text-align:right;"> 1279 </td>
-   <td style="text-align:right;"> 1278 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> VT16 </td>
+   <td style="text-align:left;"> 2020-12-10 </td>
+   <td style="text-align:right;"> 1280 </td>
+   <td style="text-align:right;"> 1279 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2019-12-15 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-01-19 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-02-19 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-03-12 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-04-14 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-05-13 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-06-14 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> VT79 </td>
+   <td style="text-align:left;"> 2020-07-15 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-08-16 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-09-13 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-10-18 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT79 </td>
    <td style="text-align:left;"> 2020-11-10 </td>
-   <td style="text-align:right;"> 508 </td>
-   <td style="text-align:right;"> 507 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> VT79 </td>
+   <td style="text-align:left;"> 2020-12-10 </td>
+   <td style="text-align:right;"> 516 </td>
+   <td style="text-align:right;"> 515 </td>
   </tr>
 </tbody>
 </table>
@@ -221,11 +239,8 @@ output:
 _NOTE: also see plots for top 20 m further down._  
    
 - VT16: 
-    - Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
-    - July 2020: something is wrong with this, check temperature and oxygen saturation   
-- VT16: Shallow CTDs in Dec 2019, Feb 2020 and especially July 2020   
-
-   
+    - A bit shallow CTDs in Dec 2019 and Feb 2020    
+    - July 2020 fixed since last version
 
 
 ![](14_QA_CTD_2020_Sognefjorden_files/figure-html/unnamed-chunk-6-1.png)<!-- -->![](14_QA_CTD_2020_Sognefjorden_files/figure-html/unnamed-chunk-6-2.png)<!-- -->
@@ -259,7 +274,7 @@ _NOTE: also see plots for top 20 m further down._
 ##   2017   13   13    0
 ##   2018   12   11    0
 ##   2019   13   12    0
-##   2020   11   10    0
+##   2020   12   12    0
 ```
 
 ### All stations  

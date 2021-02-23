@@ -31,7 +31,14 @@ output:
 - 3 files in 3 separate folders in this case    
 
 
-### Old data (2017-2019)    
+#### Compare with old versions
+
+
+
+
+
+### Older data (2017-2019)  
+
 
 ```
 ## -------------------------------------------------------------------------------------- 
@@ -82,26 +89,26 @@ output:
 ## -------------------------------------------------------------------------------------- 
 ##             StationCode
 ## addNA(Date)  VT53 VT69 VT70 VT74
-##   2019-12-16  855  125  595  231
-##   2020-01-20  855  125  595  231
-##   2020-02-19  855  125  595  231
-##   2020-03-25  855  125  595  231
-##   2020-04-20  855  125  595  231
-##   2020-05-20  855  125  595  231
-##   2020-06-22  855  125  595  231
-##   2020-07-23  855  125  595  231
-##   2020-08-24  855  125  595  231
-##   2020-09-21  855  125  595  231
-##   2020-10-22  855  125  595  231
-##   2020-11-09  855  125  595  231
-##   2020-12-16  855  125  595  231
+##   2019-12-16  856  125  595  231
+##   2020-01-20  856  125  595  231
+##   2020-02-19  856  125  595  231
+##   2020-03-25  856  125  595  231
+##   2020-04-20  856  125  595  231
+##   2020-05-20  856  125  595  231
+##   2020-06-22  856  125  595  231
+##   2020-07-23  856  125  595  231
+##   2020-08-24  856  125  595  231
+##   2020-09-21  856  125  595  231
+##   2020-10-22  856  125  595  231
+##   2020-11-09  856  125  595  231
+##   2020-12-16  856  125  595  231
 ##   <NA>          0    0    0    0
 ## StationCode2
 ## VT52_69165 VT53_69165 VT69_69165 VT70_69165 VT74_69165 VT75_69165 
 ##      13035      29960       3456      21384       8085       6188 
 ## StationCode2
 ## VT53_68911 VT69_68908 VT70_68910 VT74_68913 
-##      11115       1625       7735       3003
+##      11128       1625       7735       3003
 ```
 
 
@@ -141,80 +148,80 @@ output:
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2019-12-16 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-01-20 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-02-19 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-03-25 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-04-20 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-05-20 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-06-22 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-07-23 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-08-24 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-09-21 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-10-22 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-11-09 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT53 </td>
    <td style="text-align:left;"> 2020-12-16 </td>
+   <td style="text-align:right;"> 856 </td>
    <td style="text-align:right;"> 855 </td>
-   <td style="text-align:right;"> 854 </td>
   </tr>
   <tr>
    <td style="text-align:left;"> VT69 </td>
@@ -464,23 +471,26 @@ _NOTE: also see plots for top 20 m further down._
 - VT70:  
     - Dec. 2020: salinity a bit rugged around 180-200 m   
 
-![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-6-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-6-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-6-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-6-4.png)<!-- -->
+![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-4.png)<!-- -->
 
 ### Salinity top 50 m 
-![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-7-4.png)<!-- -->
+![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-4.png)<!-- -->
 
 
 ### Temperature    
-![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-8-4.png)<!-- -->
-
-### Temperature top 50 m 
 ![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-9-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-9-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-9-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-9-4.png)<!-- -->
 
-### Oxygen volume      
+### Temperature top 50 m 
 ![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-10-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-10-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-10-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-10-4.png)<!-- -->
 
-### Oxygen saturation        
+### Oxygen volume      
+
+Somewhat noisy, e.g. April in VT70
+
 ![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-11-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-11-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-11-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-11-4.png)<!-- -->
+
+### Oxygen saturation        
+![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-12-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-12-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-12-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-12-4.png)<!-- -->
 
 
 
@@ -502,17 +512,17 @@ _NOTE: also see plots for top 20 m further down._
 
 
 ### Station VT53       
-![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-14-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-14-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-14-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-14-4.png)<!-- -->
+![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-4.png)<!-- -->
 
 
 ### Station VT69       
-![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-15-4.png)<!-- -->
-
-### Station VT70       
 ![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-16-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-16-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-16-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-16-4.png)<!-- -->
 
-### Station VT74       
+### Station VT70       
 ![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-17-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-17-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-17-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-17-4.png)<!-- -->
+
+### Station VT74       
+![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-18-1.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-18-2.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-18-3.png)<!-- -->![](14_QA_CTD_2020_Hardangerfjorden_files/figure-html/unnamed-chunk-18-4.png)<!-- -->
 
 
 
