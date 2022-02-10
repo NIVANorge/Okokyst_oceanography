@@ -138,7 +138,8 @@ if (read_from_nivabase){
     stationcodes = stations,
     years = 2021) %>%
     mutate(Year = year(SAMPLE_DATE),
-           Month = month(SAMPLE_DATE))
+           Month = month(SAMPLE_DATE),
+           Date = floor_date(SAMPLE_DATE, unit = "day"))
   
   # Uncomment to save (overwrite) data:
   saveRDS(df_chem_2021, "Data/17_2021_NorskehavetS.rds")  
@@ -316,7 +317,9 @@ head(dat, 4)
 
 
 
-## Profile plots {.tabset}  
+## Profile plots
+
+## Plots for each variable {.tabset}  
 
 ### Chla   
 ```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
@@ -328,6 +331,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -348,6 +357,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -371,6 +386,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+
 plot_statistics_variable(df_chem, var)
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
@@ -391,6 +412,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -428,6 +455,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+
 plot_statistics_variable(df_chem, var)
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
@@ -448,6 +481,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -473,6 +512,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+
 plot_statistics_variable(df_chem, var)
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
@@ -493,6 +538,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -515,6 +566,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
@@ -539,6 +596,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+
 plot_statistics_variable(df_chem, var)
 
 df_chem %>% filter(PARAM_NAME == var) %>%
@@ -561,6 +624,12 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
+
+df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
