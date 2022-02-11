@@ -320,7 +320,8 @@ plot_cast_all <- function(df_fileinfo_stations = fileinfo_stations){
 #
 plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "", 
                                     limits = NULL, points = FALSE, referencelines = NULL,
-                                    year_by_month = FALSE){
+                                    year_by_month = FALSE,
+                                    maxdepth = NULL, maxvalue = NULL){
   if ("StationCode" %in% names(data)){
     df <- data %>%
       filter(StationCode %in% stationcode & !is.na(.data[[variable]]))
@@ -348,13 +349,20 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
     gg <- df %>%
       mutate(Date = factor(Date)) %>%
       ggplot(aes(.data[[variable]], Depth1, group = Date)) +
-      geom_path() +
-      scale_y_reverse() + 
+      geom_path() + 
       labs(title = paste(titletext, stationcode, " - ", variable),
            x = variable) +
       theme(axis.text.x = element_text(angle = -45, hjust = 0))
+    if (!is.null(maxdepth)){
+      gg <- gg + scale_y_reverse(limits = c(maxdepth, 0))
+    } else {
+      gg <- gg + scale_y_reverse()
+    }
+    if (!is.null(maxvalue)){
+      gg <- gg + scale_x_continuous(limits = c(0, maxvalue))
+    }
     if (year_by_month){
-      gg <- gg + facet_grid(rows = vars(Year), cols = vars(Month))
+      gg <- gg + facet_grid(rows = vars(Year), cols = vars(Month), drop = FALSE)
     } else {  
       gg <- gg + facet_wrap(vars(Date))
     }
