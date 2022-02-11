@@ -391,9 +391,13 @@ plot_ctdprofile_station <- function(stationcode, data, variable, titletext = "",
 #
 # titletext1 is added at start of title
 # titletext2 is added at end of title
+# interactive = TRUE will give an interactive plot with tooltip
+
 plot_ctdprofile_station_multi <- function(stationcode, data, variables, 
                                           titletext1 = "", titletext2 = "",
-                                          limits = NULL, points = FALSE){
+                                          limits = NULL, 
+                                          points = FALSE,
+                                          interactive = FALSE){
   if (!"StationCode" %in% names(data)){
     df <- data %>% rename(StationId = StationCode)
   } else {
@@ -418,19 +422,38 @@ plot_ctdprofile_station_multi <- function(stationcode, data, variables,
       scale_y_reverse() + 
       facet_wrap("Date") +
       labs(title = paste(titletext1, stationcode, " - ", titletext2))
-    if (points){
+    if (points & !interactive){
       gg <- gg + geom_point()
+    } else if (points & interactive){
+      gg <- gg + geom_point_interactive(aes(tooltip = Value))
     }
     if (!is.null(limits)){
       gg <- gg + geom_vline(xintercept = limits, linetype = 2, color = "red3")
     }
-    print(gg)
+    if (interactive){
+      girafe(ggobj = gg)
+    } else {
+      print(gg)
+    }
   }
 }
 # Examples:
-# plot_ctdprofile_station_multi("VT16", data = dat, 
-#                               variables = c("PO4-P", "TOTP"), 
-#                               points = TRUE, titletext2 = "Phosporus")
+if (FALSE){
+  plot_ctdprofile_station_multi("VT16", data = dat,
+                                variables = c("PO4-P", "TOTP"),
+                                points = TRUE, titletext2 = "Phosphorus")
+  plot_ctdprofile_station_multi("VT16", data = dat,
+                                variables = c("PO4-P", "TOTP"),
+                                points = TRUE, titletext2 = "Phosphorus",
+                                interactive = TRUE)
+  
+  # NOTE: interactive doesn't work with purrr::walk or for-next loop
+  plot_ctdprofile_station_multi("VT16", data = dat,
+                                variables = c("PO4-P", "TOTP"),
+                                points = TRUE, titletext2 = "Phosphorus",
+                                interactive = TRUE)
+  
+}
 
 
 #
