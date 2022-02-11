@@ -222,6 +222,33 @@ read_excel_til_AqM <- function(fn, sheetname, first_data_row = 5,
 # test <- read_excel_til_AqM(fn, "CTD")
 
 
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# FUNCTIONS FOR General QC ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+#
+# For a given variable, plots min, max, and mean value for all stations and months (and years)
+#
+
+plot_statistics_variable <- function(data, variable){
+  data %>%
+    filter(PARAM_NAME == variable & !is.na(VALUE)) %>%
+    group_by(Year, Month, STATION_CODE) %>%
+    summarise(Max = max(VALUE),
+              Min = min(VALUE),
+              Mean = mean(VALUE), .groups = "drop") %>%
+    pivot_longer(cols = Max:Mean, names_to = "Statistic", values_to = "Value") %>%
+    ggplot(aes(Month, STATION_CODE, fill = Value)) +
+    geom_tile() +
+    scale_fill_viridis_c() +
+    scale_x_continuous(breaks = seq(1,11,2)) +
+    facet_grid(vars(Year), vars(Statistic)) 
+}
+
+
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # FUNCTIONS FOR CTD QC ----
