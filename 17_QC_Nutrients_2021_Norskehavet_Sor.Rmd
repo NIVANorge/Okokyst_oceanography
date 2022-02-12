@@ -427,7 +427,19 @@ stations %>% walk(plot_ctdprofile_station, data = dat,
 
 ```
 
+### TOTN -2020  
 
+```{r, echo = FALSE, fig.width=10, fig.height=4.5, warning=FALSE}
+
+var <- "TOTN"
+
+df_chem_2020 %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + geom_point() + 
+  facet_grid(vars(Year), vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+
+```
 
 ### Nitrate+nitrite, ammonium and TotN  
 ```{r}
@@ -625,20 +637,64 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
-df_chem %>% filter(PARAM_NAME == var) %>%
-  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
-  geom_line() + geom_point() + 
-  facet_wrap(vars(DEPTH1), labeller = label_both) +
-  labs(title = var)
+# NOT SUITABLE HERE (just one station) (also: one plot per depth)
+# df_chem %>% filter(PARAM_NAME == var) %>% View()
+#   filter((DEPTH1-0.5) %in% c(0, 20, seq(50,250,50), seq(300,800,100))) %>%
+#   ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+#   geom_line() + geom_point() +
+#   facet_wrap(vars(DEPTH1), labeller = label_both) +
+#   labs(title = var)
 
 plot_statistics_variable(df_chem, var)
 
+# NOTE: points = FALSE sincce it's CTD
 df_chem %>% filter(PARAM_NAME == var) %>%
   pull(STATION_CODE) %>% unique() %>% 
   walk(plot_ctdprofile_station, data = dat, 
-                  variable = var, points = TRUE, year_by_month = TRUE, 
+                  variable = var, points = FALSE, year_by_month = TRUE, 
                   maxdepth = max_depth, maxvalue = max_value)
 
 ```
 
 
+
+## Check older Secchi depth for VR52 Broemsneset        
+
+```{r, fig.width=10, fig.height=8}
+
+# Read from NIvabase (1 minute) or read from saved data?
+read_from_nivabase <- FALSE
+# read_from_nivabase <- TRUE
+
+
+if (FALSE){
+  
+  df_secci_vr52 <- get_water_chemistry(
+    stationcodes = "VR52",
+    parameters = "Siktdyp") %>%
+    mutate(Year = year(SAMPLE_DATE),
+           Month = month(SAMPLE_DATE),
+           Date = floor_date(SAMPLE_DATE, unit = "day"))
+  
+  df_N_vr52 <- get_water_chemistry(
+    stationcodes = "VR52",
+    parameters = c("NO3+NO2-N", "NH4-N", "TOTN")) %>%
+    mutate(Year = year(SAMPLE_DATE),
+           Month = month(SAMPLE_DATE),
+           Date = floor_date(SAMPLE_DATE, unit = "day"))
+  
+  ggplot(df_N_vr52, aes(DEPTH1, VALUE, color = PARAM_NAME)) +
+    geom_point() +
+    geom_line() +
+    facet_grid(vars(Year), vars(Month)) +
+    coord_flip()
+
+}
+
+stations <- unique(df_chem_2021$STATION_CODE)
+
+cat(nrow(df_chem_2021), "rows of data downloaded \n\n")  
+cat("Stations:", paste(unique(df_chem_2021$STATION_CODE), collapse = ", "), "\n\n")
+cat("Parameters:", paste(unique(df_chem_2021$PARAM_NAME), collapse = ", "))
+
+```

@@ -14,7 +14,7 @@ output:
 - **Note: Here we download data from Aquamonitor insted of reading excel files (as last year)**  
 
 **Veileder:**  
-- `Documents\artikler\veiledere etc\02_2013_klassifiserings-veileder_.pdf`  
+- `02_2013_klassifiserings-veileder_.pdf`  
 - Chlorophyll: page 91.   
 "I SørNorge (til Stadt) anbefales det at innsamlingen starter i februar og avsluttes ved utgangen av oktober."   
 "Nord for Stadt anbefales det at innsamlingsperioden strekker seg fra mars til og med september."   
@@ -40,6 +40,7 @@ library(readxl)
 library(tidyr)
 library(knitr)         
 library(RColorBrewer)
+library(ggiraph)
 
 # library(niRvana)
 
@@ -289,7 +290,7 @@ head(dat, 4)
 ```
 
 
-## Profile plots    
+## .    
 
 ## Plots for each parameter {.tabset}  
 
@@ -304,17 +305,22 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
-df_chem %>% filter(PARAM_NAME == var) %>%
-  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
-  geom_line() + geom_point() + 
-  facet_wrap(vars(DEPTH1), labeller = label_both) +
-  labs(title = var)
+message("NOTE: see bottom for interactive plot of ", var, " with month on x axis")
 
 plot_statistics_variable(df_chem, var)
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
                   variable = var, points = TRUE, year_by_month = TRUE, 
                   maxdepth = max_depth, maxvalue = max_value)
+
+# Note: ggiraph plots will alwys be displayed at the bottom anyway 
+gg <- df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + 
+  geom_point_interactive(aes(tooltip = paste0(STATION_CODE, ": ", VALUE))) + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+girafe(ggobj = gg)
 
 ```
 
@@ -330,17 +336,19 @@ max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
 max_value <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(VALUE) %>% max() %>% pretty() %>% .[2]
 
-df_chem %>% filter(PARAM_NAME == var) %>%
-  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
-  geom_line() + geom_point() + 
-  facet_wrap(vars(DEPTH1), labeller = label_both) +
-  labs(title = var)
-
 plot_statistics_variable(df_chem, var)
 
 stations %>% walk(plot_ctdprofile_station, data = dat, 
                   variable = var, points = TRUE, year_by_month = TRUE, 
                   maxdepth = max_depth, maxvalue = max_value)
+
+gg <- df_chem %>% filter(PARAM_NAME == var) %>%
+  ggplot(aes(Month, VALUE, color = STATION_CODE)) +
+  geom_line() + 
+  geom_point_interactive(aes(tooltip = paste0(STATION_CODE, ": ", VALUE))) + 
+  facet_wrap(vars(DEPTH1), labeller = label_both) +
+  labs(title = var)
+girafe(ggobj = gg)
 
 ```
 
@@ -434,11 +442,15 @@ stations %>%
 
 var <- "PO4-P"
 
-df_chem %>% filter(PARAM_NAME == var) %>%
+message("NOTE: see bottom for interactive plot of ", var, " with month on x axis")
+
+gg <- df_chem %>% filter(PARAM_NAME == var) %>%
   ggplot(aes(Month, VALUE, color = STATION_CODE)) +
-  geom_line() + geom_point() + 
+  geom_line() + 
+  geom_point_interactive(aes(tooltip = paste0(STATION_CODE, ": ", VALUE))) + 
   facet_wrap(vars(DEPTH1), labeller = label_both) +
   labs(title = var)
+girafe(ggobj = gg)
 
 max_depth <- df_chem %>% filter(PARAM_NAME == var) %>%
   pull(DEPTH1) %>% max() %>% pretty() %>% .[2]
