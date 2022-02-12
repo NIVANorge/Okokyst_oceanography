@@ -1,5 +1,5 @@
 ---
-title: "ØKOKYST Nordsjøen 2021 - QA for Sognefjorden CTDs"
+title: "ØKOKYST Norskehavet Sør 2021 - QA CTDs"
 author: "DHJ"
 date: "13 1 2020"
 output:
@@ -12,12 +12,12 @@ output:
 
 ## QC done February 2022    
 - CTDs with salinity + temp + oxygen      
-- Excel files from Trond Kristansen's OneDrive (11.02.2022)
+- Excel files from OneDrive, sent by Caroline by mail (11.02.2022)  
+- Companies RMS (Runde miljøsenter) and Aqua kompetanse
 - Stations:    
-    * VR48, VR49, VT53, VT70, VT74, VT8 - Hardangerfjorden (see other script)  
-    * VT16 - Sognefjorden (this script)   
-    * VT79 - Sognefjorden (this script)    
-    
+    * VR31, VR52, VR61 - Aqua-kompetanse  
+    * VT71 - RMS  
+
 ```{r, echo=FALSE, results='hide', message=FALSE, warning=FALSE}
 
 ## 1. Libraries
@@ -62,16 +62,22 @@ read_excel_files <- FALSE
 
 if (read_excel_files){
   
-  # Excel files from Trond Kristansen's OneDrive (11.02.2022)
-  # Synchronized to my own pc (in OneDrive, click Sync button: https://stackoverflow.com/a/59884977/1734247)
+  # Excel files from OneDrive (11.02.2022)
+  # Sent by mail by Caroline and saved on PC
 
-  datafolder <- "C:/Users/DHJ/NIVA/Trond Kristiansen - Nordsjoen_Nord/xlsfiles/Sognefjorden//"
+  datafolder <- "../OneDrive_1_11-02-2022/Aqua_kompetanse/"
   fns <- dir(datafolder, pattern = ".xlsx")
   fns <- fns[!grepl("~", fns)]
-  
+  dat1 <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder)
 
-  dat <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder)
-  
+  datafolder <- "../OneDrive_1_11-02-2022/RMS/"
+  fns <- dir(datafolder, pattern = ".xlsx")
+  fns <- fns[!grepl("~", fns)]
+  dat2 <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder)
+
+  dat <- bind_rows(dat1, dat2)
+  rm(dat1, dat2)
+
   # Used last year, but no StationCode in excel anymore
   # - and Date is OK already
   # dat <- dat %>%
@@ -81,14 +87,16 @@ if (read_excel_files){
   #     )
   
   dat <- dat %>%
-    mutate(Date = as.Date(dmy_hms(Date))) %>%
-    mutate(StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE))
+    mutate(Date = as.Date(dmy_hms(Date)),
+           StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE),
+           Month = month(Date),
+           Year = year(Date))
   
-  saveRDS(dat, "Data/14_QA_CTD_2021_Sognefjorden.rds")
+  saveRDS(dat, "Data/14_QA_CTD_2021_NorskehavSor_dat.rds")
   
 } else {
   
-  dat <- readRDS("Data/14_QA_CTD_2021_Sognefjorden.rds")
+  dat <- readRDS("Data/14_QA_CTD_2021_NorskehavSor_dat.rds")
   
 }
 
@@ -98,43 +106,20 @@ xtabs(~addNA(Date), dat)
 ```
 
 
-### Older data (2017-2019)  
+### Older data (2017-2020)  
 
 ```{r, message = FALSE}
-# if (FALSE){
 
-datafolder <- "Datasett/Sognefjorden_2019"
-fns <- dir(datafolder)
+dat_old1_1 <- readRDS("Data/14_QA_CTD_2020_Norskehavsor_dat_2017-19.rds") # "VR51", "VT71"    (note "wrong" filename)
+dat_old1_2 <- readRDS("Data/14_QA_CTD_2020_NorskehavSor2_dat_2017-19.rds") # "VR52", "VT42", "VR31" (contains 'Fluorescense')  
+dat_old2_1 <- readRDS("Data/14_QA_CTD_2020_NorskehavSor1_dat.rds")  # "VR51", "VT71"
+dat_old2_2 <- readRDS("Data/14_QA_CTD_2020_NorskehavSor2_dat.rds")  # "VR52", "VT42", "VR31"
 
-dat_old1 <- fns %>% map_dfr(read_excel_add_filename, folder = datafolder) %>%
-  mutate(Date = as.Date(Date, origin = "1899-12-30")) %>%
-  mutate(StationCode2 = paste0(sub("_CTD.xlsx", "", Filename, fixed = TRUE), "_", StationCode),
-         StationCode = sub("_CTD.xlsx", "", Filename, fixed = TRUE)
-  )
+list(dat_old1_1, dat_old1_2, dat_old2_1, dat_old2_2) %>% map(names)
 
-dat_old2 <- readRDS("Data/14_QA_CTD_2020_Sognefjorden.rds")
-
-dat_old <- bind_rows(dat_old1, dat_old2)
-
-
-# check dates
-
-cat("-------------------------------------------------------------------------------------- \n")
-cat("dat_old: \n")
-cat("-------------------------------------------------------------------------------------- \n")
-# xtabs(~addNA(Date), dat_old)
-xtabs(~addNA(Date) + StationCode, dat_old)
-
-cat("-------------------------------------------------------------------------------------- \n")
-cat("dat: \n")
-cat("-------------------------------------------------------------------------------------- \n")
-# xtabs(~addNA(Date), dat)
-xtabs(~addNA(Date) + StationCode, dat)
-
-xtabs(~StationCode2, dat_old)
-# xtabs(~StationCode2, dat)
-
-#}
+dat_old <- bind_rows(dat_old1_1, dat_old1_2, dat_old2_1, dat_old2_2) %>%
+    mutate(Month = month(Date),
+           Year = year(Date))
 
 ```
 
@@ -146,21 +131,22 @@ xtabs(~StationCode2, dat_old)
 - `dat` = last part of 2020 + 2021  
 ```{r}
 
-if (FALSE){
-  tab <- xtabs(~Date, dat_old)
-  missing <- is.na(dat$Date)
-  cat("-------------------------------------------------------------------------------------- \n")
-  cat("dat_old: \n")
-  cat("-------------------------------------------------------------------------------------- \n")
-  cat("Number of dates: ", length(tab), "\n")
-  cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
-  cat("Missing dates: ", sum(missing), "\n")
-}
+# check dates
 
-tab <- xtabs(~Date, dat)
-missing <- is.na(dat$Date)
+cat("-------------------------------------------------------------------------------------- \n")
+cat("dat_old: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+# xtabs(~addNA(Date), dat_old)
+xtabs(~Year + Month + StationCode, dat_old)
+
 cat("-------------------------------------------------------------------------------------- \n")
 cat("dat: \n")
+cat("-------------------------------------------------------------------------------------- \n")
+# xtabs(~addNA(Date), dat)
+xtabs(~addNA(Year) + StationCode, dat)
+xtabs(~addNA(Month) + StationCode, dat %>% filter(Year == 2021))
+# xtabs(~addNA(Date) + StationCode, dat)
+
 cat("-------------------------------------------------------------------------------------- \n")
 cat("Number of dates: ", length(tab), "\n")
 cat("First and last date: ", head(names(tab),1), "-", tail(names(tab),1), "\n")
@@ -179,10 +165,6 @@ dat <- dat %>%
          Temperatur = `Temperatur C`,
          Oksygen = `Oksygen ml O2/L`,
          Oksygenmetning = `Oksygenmetning %`)
-
-dat <- dat %>%
-  mutate(Month = month(Date),
-         Year = year(Date))
 
 ```
 
@@ -207,6 +189,22 @@ dat %>%
 stations <- dat %>%
   count(StationCode) %>%
   pull(StationCode  )
+
+```
+
+### EXTRA: Fixing oxygen values for VT71  
+
+- dividing values October-December by 1000 (i.e. they were given in ul [microliters] instead of ml O2/L)        
+
+```{r}
+
+dat_original <- dat
+
+dat <- dat %>%
+  mutate(Oksygen = case_when(
+    StationCode == "VT71" & Month >= 10 ~ Oksygen/1000,
+    TRUE ~ Oksygen)
+  )
 
 ```
 
@@ -237,21 +235,6 @@ stations %>% walk(
 # stations %>% walk(plot_ctdprofile_station, data = dat, variable = "Saltholdighet", points = FALSE)
 
 ```
-
-
-#### Check duplication    
-* Data duplicated  
-```{r}
-df <- dat %>%
-  filter(StationCode == "VT79" & Month == 9)
-
-plot(df$Depth1)
-plot(df$Saltholdighet)
-plot(df$Temperatur)
-plot(df$Oksygen)
-
-```
-
 
 ### Salinity top 50 m 
 ```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
@@ -287,6 +270,8 @@ stations %>% walk(
 
 ### Oxygen volume      
 
+- VT71 has no data zeros 
+
 ```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
 
 stations %>% walk(
@@ -295,13 +280,15 @@ stations %>% walk(
 
 ```
 
-### Oxygen volume, excl. April       
+#### Show error in original data for VT71  
+
+- 1000 times too high  
+- fixed in section 2 'EXTRA'  
 
 ```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
 
-stations %>% walk(
-  plot_ctdprofile_station,
-  data = dat %>% filter(Month != 4), variable = "Oksygen", points = FALSE)
+plot_ctdprofile_station("VT71",
+  data = dat_original, variable = "Oksygen", points = FALSE)
 
 ```
 
@@ -315,21 +302,9 @@ stations %>% walk(
 
 ```
 
-### Oxygen saturation, excl. April
-
-```{r, echo = FALSE, fig.width=9, fig.height=7, warning=FALSE}
-
-stations %>% walk(
-  plot_ctdprofile_station,
-  data = dat %>% filter(Month != 4), variable = "Oksygenmetning", points = FALSE)
-
-
-```
-
-
 ## 4. Times series (since 2017)  
 
-### Combined data
+### Combine data
 ```{r}
 
 dat2 <- bind_rows(dat_old, dat) %>%
@@ -346,62 +321,46 @@ dat2 %>%
 
 ```
 
-### All stations  
+
+### Station VR31       
 ```{r}
 
-  
-  # df <- df_chem %>%
-  #   distinct(STATION_CODE, PARAM_NAME) 
-  # 
-  # walk2(
-  #   df$STATION_CODE[1:3],
-  #   df$PARAM_NAME[1:3],
-  #   ~plot_ctdprofile_station(stationcode = .x, 
-  #                            variable = .y,
-  #                            data = dat, 
-  #                            points = TRUE, year_by_month = TRUE)
-  
-
+station <- "VR31"
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygenmetning", titletext = "")
 
 ```
 
-### Station VT16       
+### Station VR52       
 ```{r}
 
-if (FALSE){
-  # check depths
-  dat2 %>%
-    filter(StationCode %in% "VT16") %>%  View()
-    group_by(Date) %>%
-    summarize(Max_depth = max(Depth1)) %>%
-    arrange(Max_depth)
-}
+station <- "VR52"
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygenmetning", titletext = "")
 
-# debugonce(plot_timeseries_station)
-plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Saltholdighet", titletext = "")
-plot_timeseries_station(stationcode = "VT16", data = dat2, variable = "Temperatur", titletext = "")
-plot_timeseries_station(stationcode = "VT16", data = dat2  %>% filter(Month != 4), variable = "Oksygen", titletext = "")
-plot_timeseries_station(stationcode = "VT16", data = dat2 %>% filter(Month != 4), variable = "Oksygenmetning", titletext = "")
+```
+### Station VR61       
+```{r}
+
+station <- "VR61"
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygenmetning", titletext = "")
+
+```
+### Station VT71       
+```{r}
+
+station <- "VT71"
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Saltholdighet", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Temperatur", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygen", titletext = "")
+plot_timeseries_station(stationcode = station, data = dat2, variable = "Oksygenmetning", titletext = "")
 
 ```
 
-### Station VT79       
-```{r}
-
-if (FALSE){
-  # check depths
-  dat2 %>%
-    filter(StationCode %in% "VT79") %>%  View()
-    group_by(Date) %>%
-    summarize(Max_depth = max(Depth1)) %>%
-    arrange(Max_depth)
-}
-
-# debugonce(plot_timeseries_station)
-plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Saltholdighet", titletext = "")
-plot_timeseries_station(stationcode = "VT79", data = dat2, variable = "Temperatur", titletext = "")
-plot_timeseries_station(stationcode = "VT79", data = dat2  %>% filter(Month != 4 & Oksygen > -200), 
-                        variable = "Oksygen", titletext = "")
-plot_timeseries_station(stationcode = "VT79", data = dat2 %>% filter(Month != 4), variable = "Oksygenmetning", titletext = "")
-
-```
